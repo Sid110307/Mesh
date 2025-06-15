@@ -10,10 +10,10 @@ extern limine_kernel_address_request kernel_addr_request;
 extern limine_smp_request smp_request;
 extern limine_boot_time_request boot_time_request;
 
-char buffer[33] = {};
-
 void initRenderer()
 {
+	static char buffer[33] = {};
+
 	Renderer::init();
 	Renderer::clear(BLACK);
 	Renderer::print("\x1b[32mMesh Booted Successfully!\n");

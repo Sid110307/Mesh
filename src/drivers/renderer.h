@@ -2,10 +2,10 @@
 
 #include "../core/utils.h"
 
-struct PSF1Header
+struct __attribute__((packed)) PSF1Header
 {
 	uint8_t magic[2], mode, charSize;
-} __attribute__((packed));
+};
 
 struct Font
 {
