@@ -32,22 +32,24 @@ char* utoa(uint64_t value, char* buffer, const size_t bufferSize, const uint8_t 
 	static constexpr auto digitsUpper = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 	const char* digits = uppercase ? digitsUpper : digitsLower;
 
-	size_t index = bufferSize - 1;
-	buffer[index--] = '\0';
+	size_t index = bufferSize;
+	buffer[--index] = '\0';
 
 	if (value == 0)
 	{
-		if (index == SIZE_MAX && value) return nullptr;
-		buffer[index--] = '0';
-	}
-	else
-		while (value > 0 && index != SIZE_MAX)
-		{
-			buffer[index--] = digits[value % base];
-			value /= base;
-		}
+		if (index == 0) return nullptr;
+		buffer[--index] = '0';
 
-	return &buffer[index + 1];
+		return &buffer[index];
+	}
+
+	while (value > 0 && index > 0)
+	{
+		buffer[--index] = digits[value % base];
+		value /= base;
+	}
+
+	return index < bufferSize ? &buffer[index] : nullptr;
 }
 
 char* strchr(const char* str, const int c)
@@ -56,7 +58,6 @@ char* strchr(const char* str, const int c)
 	{
 		if (const auto uc = static_cast<unsigned char>(*str); uc == static_cast<unsigned char>(c))
 			return const_cast<char*>(str);
-
 		str++;
 	}
 	return nullptr;
@@ -88,8 +89,8 @@ void* memcpy(void* dest, const void* src, size_t n)
 {
 	if (!dest || !src || n == 0) return dest;
 
-	auto d = static_cast<char*>(dest);
-	auto s = static_cast<const char*>(src);
+	auto* d = static_cast<uint8_t*>(dest);
+	auto* s = static_cast<const uint8_t*>(src);
 
 	if ((reinterpret_cast<uintptr_t>(d) | reinterpret_cast<uintptr_t>(s)) % 8 == 0)
 		while (n >= 8)
@@ -109,8 +110,26 @@ void* memset(void* dest, const int c, size_t n)
 {
 	if (!dest || n == 0) return dest;
 
-	auto d = static_cast<char*>(dest);
-	while (n--) *d++ = static_cast<char>(c);
+	const auto b = static_cast<uint8_t>(c);
+	auto d = static_cast<uint8_t*>(dest);
+
+	if (reinterpret_cast<uintptr_t>(d) % 8 == 0 && n >= 8)
+	{
+		uint64_t pattern = b;
+		pattern |= pattern << 8;
+		pattern |= pattern << 16;
+		pattern |= pattern << 32;
+
+		auto d64 = reinterpret_cast<uint64_t*>(d);
+		while (n >= 8)
+		{
+			*d64++ = pattern;
+			n -= 8;
+		}
+		d = reinterpret_cast<uint8_t*>(d64);
+	}
+
+	while (n--) *d++ = b;
 	return dest;
 }
 

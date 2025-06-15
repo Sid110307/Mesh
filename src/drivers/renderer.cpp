@@ -60,12 +60,11 @@ void Renderer::scroll()
 		return;
 	}
 
-	const auto bytesPerLine = fbPitch * sizeof(uint32_t);
-	const auto* src = reinterpret_cast<uint8_t*>(fbAddress) + bytesPerLine;
-	auto* dst = reinterpret_cast<uint8_t*>(fbAddress);
+	const size_t bytesPerLine = fbPitch;
+	const size_t scrollBytes = (fbHeight - font.height) * bytesPerLine;
 
-	memmove(dst, src, (fbHeight - font.height) * bytesPerLine);
-	memset(dst + (fbHeight - font.height) * bytesPerLine, 0, font.height * bytesPerLine);
+	memmove(fbAddress, reinterpret_cast<uint8_t*>(fbAddress) + bytesPerLine, scrollBytes);
+	memset(reinterpret_cast<uint8_t*>(fbAddress) + scrollBytes, 0, font.height * bytesPerLine);
 }
 
 void Renderer::clear(const uint32_t color)
@@ -76,7 +75,8 @@ void Renderer::clear(const uint32_t color)
 		return;
 	}
 
-	memset(fbAddress, static_cast<int>(color), fbHeight * fbPitch);
+	const size_t totalPixels = (fbPitch / 4) * fbHeight;
+	for (size_t i = 0; i < totalPixels; ++i) fbAddress[i] = color;
 	cursorX = cursorY = 0;
 }
 
@@ -139,9 +139,9 @@ void Renderer::print(const char* str, const uint32_t fgDefault, const uint32_t b
 	char escBuf[16];
 	int escLen = 0;
 
-	for (size_t i = 0; str[i]; ++i)
+	for (const char* p = str; *p; ++p)
 	{
-		const char c = str[i];
+		const char c = *p;
 
 		if (inEscape)
 		{

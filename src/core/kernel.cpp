@@ -1,5 +1,6 @@
-#include "../arch/gdt.h"
 #include "../drivers/renderer.h"
+#include "../arch/gdt.h"
+#include "../arch/idt.h"
 #include "./limine.h"
 
 extern limine_framebuffer_request framebuffer_request;
@@ -67,16 +68,29 @@ void initRenderer()
 		Renderer::print(utoa(smp_request.response->cpu_count, buffer, sizeof(buffer)));
 		Renderer::print("\n");
 	}
+}
 
-	Renderer::print("\n\x1b[0mSystem ready.\n");
+void initGDT()
+{
+	Renderer::print("\x1b[36mInitializing GDT... ");
+	GDTManager::init();
+	GDTManager::load();
+	GDTManager::setTSS(0x800000); // TODO: Set proper TSS
+	Renderer::print("\x1b[32mDone!\n");
+}
+
+void initIDT()
+{
+	Renderer::print("\x1b[36mInitializing IDT... ");
+	IDTManager::init();
+	Renderer::print("\x1b[32mDone!\n");
 }
 
 extern "C" [[noreturn]] void kernelMain()
 {
-	GDTManager::init();
-	GDTManager::load();
-	GDTManager::setTSS(0x800000);
-
 	initRenderer();
+	initGDT();
+	initIDT();
+
 	while (true) asm volatile ("hlt");
 }
