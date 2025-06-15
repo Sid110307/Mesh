@@ -46,16 +46,25 @@ set(EMBED_ASSET_OBJS "")
 
 foreach (asset ${EMBED_ASSETS})
     file(RELATIVE_PATH rel_path "${CMAKE_SOURCE_DIR}" "${asset}")
-    string(REPLACE "/" "_" symbol_name "${rel_path}")
-    string(REPLACE "." "_" symbol_name "${symbol_name}")
-    string(REPLACE "-" "_" symbol_name "${symbol_name}")
-    set(obj_file "${CMAKE_BINARY_DIR}/${symbol_name}.o")
+
+    string(REPLACE "/" "_" base "${rel_path}")
+    string(REPLACE "." "_" base "${base}")
+    string(REPLACE "-" "_" base "${base}")
+    set(symbol_base "asset_${base}")
+
+    string(REPLACE "/" "_" object "${asset}")
+    string(REPLACE "." "_" object "${object}")
+    string(REPLACE "-" "_" orig "${object}")
+    set(obj_file "${CMAKE_BINARY_DIR}/${symbol_base}.o")
 
     add_custom_command(
             OUTPUT ${obj_file}
             COMMAND ${OBJCOPY_EXECUTABLE} -I binary -O elf64-x86-64 -B i386 ${asset} ${obj_file}
+            COMMAND ${OBJCOPY_EXECUTABLE} --redefine-sym _binary_${orig}_start=${symbol_base}_start ${obj_file}
+            COMMAND ${OBJCOPY_EXECUTABLE} --redefine-sym _binary_${orig}_end=${symbol_base}_end ${obj_file}
+            COMMAND ${OBJCOPY_EXECUTABLE} --redefine-sym _binary_${orig}_size=${symbol_base}_size ${obj_file}
             DEPENDS ${asset}
-            COMMENT "📦 Embedding ${rel_path}"
+            COMMENT "📦 Embedding asset ${rel_path} as symbol ${symbol_name}"
     )
     list(APPEND EMBED_ASSET_OBJS ${obj_file})
 endforeach ()

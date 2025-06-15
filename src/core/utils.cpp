@@ -15,10 +15,12 @@ int atoi(const char* str)
 
 	while (*str >= '0' && *str <= '9')
 	{
-		result = result * 10 + (*str - '0');
-		str++;
-	}
+		const int digit = *str - '0';
+		if (result > (INT_MAX - digit) / 10) return negative ? INT_MIN : INT_MAX;
 
+		result = result * 10 + digit;
+		++str;
+	}
 	return negative ? -result : result;
 }
 
@@ -54,29 +56,35 @@ char* strchr(const char* str, const int c)
 {
 	while (*str)
 	{
-		if (*str == static_cast<char>(c)) return const_cast<char*>(str);
+		if (const auto uc = static_cast<unsigned char>(*str); uc == static_cast<unsigned char>(c))
+			return const_cast<char*>(str);
+
 		str++;
 	}
+
+	do { if (*str == c) return const_cast<char*>(str); }
+	while (*str++);
+
 	return nullptr;
 }
 
-char* strtok(char* str, const char* delim)
+char* strtok_r(char* str, const char* delim, char** savePtr)
 {
-	static char* nextToken = nullptr;
+	if (str) *savePtr = str;
+	if (!*savePtr) return nullptr;
 
-	if (str) nextToken = str;
-	if (!nextToken) return nullptr;
+	char* tokenStart = nullptr;
 
-	while (*nextToken && strchr(delim, *nextToken)) ++nextToken;
-	if (*nextToken == '\0') return nullptr;
+	while (**savePtr && strchr(delim, **savePtr)) ++(*savePtr);
+	if (**savePtr == '\0') return nullptr;
 
-	char* tokenStart = nextToken;
-	while (*nextToken && !strchr(delim, *nextToken)) ++nextToken;
+	tokenStart = *savePtr;
+	while (**savePtr && !strchr(delim, **savePtr)) ++(*savePtr);
 
-	if (*nextToken)
+	if (**savePtr)
 	{
-		*nextToken = '\0';
-		++nextToken;
+		**savePtr = '\0';
+		++*savePtr;
 	}
 
 	return tokenStart;
@@ -130,12 +138,3 @@ void* memmove(void* dest, const void* src, size_t n)
 
 	return dest;
 }
-
-uint8_t inb(uint16_t port)
-{
-	uint8_t ret;
-	asm volatile ("inb %1, %0" : "=a"(ret) : "Nd"(port));
-	return ret;
-}
-
-void outb(uint16_t port, uint8_t val) { asm volatile ("outb %0, %1" : : "a"(val), "Nd"(port)); }

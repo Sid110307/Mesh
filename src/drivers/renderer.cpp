@@ -1,30 +1,46 @@
 #include "./renderer.h"
+#include "./io.h"
 #include "../core/limine.h"
 
 extern limine_framebuffer_request framebuffer_request;
-extern limine_hhdm_request hhdm_request;
-extern uint8_t _binary__mnt_c_Users_srsfo_Downloads_Mesh_src_assets_fonts_zap_ext_light18_psf_start[];
+extern uint8_t asset_src_assets_fonts_zap_ext_light18_psf_start[];
 
 void Renderer::init()
 {
-	if (!framebuffer_request.response || framebuffer_request.response->framebuffer_count < 1) return;
+	if (!framebuffer_request.response || framebuffer_request.response->framebuffer_count < 1)
+	{
+		Serial::write("Renderer: No framebuffer available.\n");
+		return;
+	}
 
 	const auto* fb = framebuffer_request.response->framebuffers[0];
+	if (fb->memory_model != LIMINE_FRAMEBUFFER_RGB || fb->bpp != 32)
+	{
+		Serial::write("Renderer: Unsupported framebuffer format (memory model: ");
+		Serial::write(fb->memory_model);
+		Serial::write(", bpp: ");
+		Serial::write(fb->bpp);
+		Serial::write(").\n");
+
+		fbAddress = nullptr;
+		return;
+	}
+
 	fbAddress = static_cast<uint32_t*>(fb->address);
 	fbWidth = fb->width;
 	fbHeight = fb->height;
 	fbPitch = fb->pitch;
 
-	auto* header = reinterpret_cast<const PSF1Header*>(
-		_binary__mnt_c_Users_srsfo_Downloads_Mesh_src_assets_fonts_zap_ext_light18_psf_start);
+	auto* header = reinterpret_cast<const PSF1Header*>(asset_src_assets_fonts_zap_ext_light18_psf_start);
 	if (header->magic[0] != 0x36 || header->magic[1] != 0x04)
 	{
+		Serial::write("Renderer: Invalid PSF1 font header.\n");
 		fbAddress = nullptr;
+
 		return;
 	}
 
-	font.glyphBuffer = _binary__mnt_c_Users_srsfo_Downloads_Mesh_src_assets_fonts_zap_ext_light18_psf_start + sizeof(
-		PSF1Header);
+	font.glyphBuffer = asset_src_assets_fonts_zap_ext_light18_psf_start + sizeof(PSF1Header);
 	font.width = 8;
 	font.height = header->charSize;
 	font.glyphCount = (header->mode & 1) ? 512 : 256;
@@ -32,38 +48,45 @@ void Renderer::init()
 
 void Renderer::setCursor(const uint32_t x, const uint32_t y)
 {
-	cursorX = (x >= fbWidth / font.width) ? (fbWidth / font.width - 1) : x;
-	cursorY = (y >= fbHeight / font.height) ? (fbHeight / font.height - 1) : y;
+	cursorX = x >= fbWidth / font.width ? fbWidth / font.width - 1 : x;
+	cursorY = y >= fbHeight / font.height ? fbHeight / font.height - 1 : y;
 }
 
 void Renderer::scroll()
 {
-	if (!fbAddress || font.height == 0 || font.width == 0) return;
+	if (!fbAddress || font.height == 0 || font.width == 0)
+	{
+		Serial::write("Renderer: Cannot scroll, framebuffer or font not initialized.\n");
+		return;
+	}
 
-	const uint32_t rows = fbHeight / font.height;
-	const uint32_t visibleRows = rows - 1;
-	const uint32_t pixelsPerLine = fbPitch / 4;
-	const uint32_t linesToMove = visibleRows * font.height;
+	const auto bytesPerLine = fbPitch * sizeof(uint32_t);
+	const auto* src = reinterpret_cast<uint8_t*>(fbAddress) + bytesPerLine;
+	auto* dst = reinterpret_cast<uint8_t*>(fbAddress);
 
-	for (uint32_t y = 0; y < linesToMove; ++y)
-		for (uint32_t x = 0; x < fbWidth; ++x)
-			fbAddress[y * pixelsPerLine + x] = fbAddress[(y + font.height) * pixelsPerLine + x];
-	for (uint32_t y = linesToMove; y < fbHeight; ++y)
-		for (uint32_t x = 0; x < fbWidth; ++x) fbAddress[y * pixelsPerLine + x] = 0;
+	memmove(dst, src, (fbHeight - font.height) * bytesPerLine);
+	memset(dst + (fbHeight - font.height) * bytesPerLine, 0, font.height * bytesPerLine);
 }
 
 void Renderer::clear(const uint32_t color)
 {
-	if (!fbAddress) return;
+	if (!fbAddress)
+	{
+		Serial::write("Renderer: Cannot clear, framebuffer not initialized.\n");
+		return;
+	}
 
-	for (uint64_t y = 0; y < fbHeight; ++y)
-		for (uint64_t x = 0; x < fbWidth; ++x) fbAddress[y * (fbPitch / 4) + x] = color;
+	memset(fbAddress, static_cast<int>(color), fbHeight * fbPitch);
 	cursorX = cursorY = 0;
 }
 
 void Renderer::printChar(const char c, const uint32_t fg, const uint32_t bg)
 {
-	if (!fbAddress) return;
+	if (!fbAddress)
+	{
+		Serial::write("Renderer: Cannot print character, framebuffer not initialized.\n");
+		return;
+	}
 
 	if (c == '\n')
 	{
@@ -94,8 +117,17 @@ void Renderer::printChar(const char c, const uint32_t fg, const uint32_t bg)
 
 void Renderer::printCharAt(const uint32_t x, const uint32_t y, const char c, const uint32_t fg, const uint32_t bg)
 {
-	if (!fbAddress || c == '\n' || c == '\r') return;
-	if (x >= fbWidth / font.width || y >= fbHeight / font.height) return;
+	if (!fbAddress || c == '\n' || c == '\r')
+	{
+		Serial::write(
+			"Renderer: Cannot print character at position, framebuffer not initialized or invalid character.\n");
+		return;
+	}
+	if (x >= fbWidth / font.width || y >= fbHeight / font.height)
+	{
+		Serial::write("Renderer: Invalid position for character.\n");
+		return;
+	}
 
 	drawGlyph(x * font.width, y * font.height, c, fg, bg);
 }
@@ -148,7 +180,12 @@ void Renderer::printAt(const uint32_t x, const uint32_t y, const char* str, cons
 inline void Renderer::drawGlyph(const uint32_t px, const uint32_t py, const char c, const uint32_t fg,
                                 const uint32_t bg)
 {
-	if (!font.glyphBuffer || font.height == 0 || font.width == 0 || static_cast<uint8_t>(c) >= font.glyphCount) return;
+	if (!font.glyphBuffer || font.height == 0 || font.width == 0 || static_cast<uint8_t>(c) >= font.glyphCount || px +
+		font.width > fbWidth || py + font.height > fbHeight)
+	{
+		Serial::write("Renderer: Invalid glyph or position for character.\n");
+		return;
+	}
 
 	const uint8_t* glyph = font.glyphBuffer + static_cast<uint8_t>(c) * font.height;
 	for (uint32_t y = 0; y < font.height && py + y < fbHeight; ++y)
@@ -164,7 +201,8 @@ void Renderer::escapeAnsi(const char* seq, uint32_t& fg, uint32_t& bg, const uin
 	for (size_t i = 0; seq[i] && len < sizeof(buf) - 1; ++i) buf[len++] = seq[i];
 	buf[len] = '\0';
 
-	const char* token = strtok(buf, ";");
+	char* savePtr = nullptr;
+	const char* token = strtok_r(buf, ";", &savePtr);
 	while (token)
 	{
 		switch (atoi(token))
@@ -274,8 +312,11 @@ void Renderer::escapeAnsi(const char* seq, uint32_t& fg, uint32_t& bg, const uin
 				bg = LIGHT_WHITE;
 				break;
 			default:
+				Serial::write("Renderer: Unsupported ANSI escape code: ");
+				Serial::write(token);
+				Serial::write("\n");
 				break;
 		}
-		token = strtok(nullptr, ";");
+		token = strtok_r(nullptr, ";", &savePtr);
 	}
 }
