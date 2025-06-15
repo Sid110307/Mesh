@@ -32,22 +32,20 @@ char* utoa(uint64_t value, char* buffer, const size_t bufferSize, const uint8_t 
 	static constexpr auto digitsUpper = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 	const char* digits = uppercase ? digitsUpper : digitsLower;
 
-	int index = static_cast<int>(bufferSize - 1);
+	size_t index = bufferSize - 1;
 	buffer[index--] = '\0';
 
 	if (value == 0)
 	{
-		if (index < 0) return nullptr;
+		if (index == SIZE_MAX && value) return nullptr;
 		buffer[index--] = '0';
 	}
 	else
-	{
-		while (value > 0 && index >= 0)
+		while (value > 0 && index != SIZE_MAX)
 		{
 			buffer[index--] = digits[value % base];
 			value /= base;
 		}
-	}
 
 	return &buffer[index + 1];
 }
@@ -61,10 +59,6 @@ char* strchr(const char* str, const int c)
 
 		str++;
 	}
-
-	do { if (*str == c) return const_cast<char*>(str); }
-	while (*str++);
-
 	return nullptr;
 }
 
@@ -97,14 +91,14 @@ void* memcpy(void* dest, const void* src, size_t n)
 	auto d = static_cast<char*>(dest);
 	auto s = static_cast<const char*>(src);
 
-	if (n >= 4 && reinterpret_cast<uintptr_t>(d) % 4 == 0 && reinterpret_cast<uintptr_t>(s) % 4 == 0)
-		while (n >= 4)
+	if ((reinterpret_cast<uintptr_t>(d) | reinterpret_cast<uintptr_t>(s)) % 8 == 0)
+		while (n >= 8)
 		{
-			*reinterpret_cast<uint32_t*>(d) = *reinterpret_cast<const uint32_t*>(s);
+			*reinterpret_cast<uint64_t*>(d) = *reinterpret_cast<const uint64_t*>(s);
 
-			d += 4;
-			s += 4;
-			n -= 4;
+			d += 8;
+			s += 8;
+			n -= 8;
 		}
 
 	while (n--) *d++ = *s++;
@@ -123,17 +117,21 @@ void* memset(void* dest, const int c, size_t n)
 void* memmove(void* dest, const void* src, size_t n)
 {
 	if (!dest || !src || n == 0 || dest == src) return dest;
+	const auto dInt = reinterpret_cast<uintptr_t>(dest);
 
-	auto d = static_cast<char*>(dest);
-	auto s = static_cast<const char*>(src);
+	if (const auto sInt = reinterpret_cast<uintptr_t>(src); dInt < sInt || dInt - sInt >= n)
+	{
+		auto dPtr = static_cast<char*>(dest);
+		auto sPtr = static_cast<const char*>(src);
 
-	if (d < s || d >= s + n) while (n--) *d++ = *s++;
+		while (n--) *dPtr++ = *sPtr++;
+	}
 	else
 	{
-		d += n;
-		s += n;
+		auto dPtr = static_cast<char*>(dest) + n;
+		auto sPtr = static_cast<const char*>(src) + n;
 
-		while (n--) *--d = *--s;
+		while (n--) *--dPtr = *--sPtr;
 	}
 
 	return dest;

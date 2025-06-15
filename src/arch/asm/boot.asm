@@ -1,7 +1,9 @@
 bits 64
+default rel
+
 section .text
-global _start
-extern kernelMain
+    global _start
+    extern kernelMain
 
 _start:
     lea rsp, [rel stack_top]
@@ -11,7 +13,7 @@ _start:
     jmp .hang
 
 section .bss
-align 16
+    align 16
 stack_bottom:
     resb 16384
 stack_top:

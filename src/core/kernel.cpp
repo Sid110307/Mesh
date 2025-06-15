@@ -1,3 +1,4 @@
+#include "../arch/gdt.h"
 #include "../drivers/renderer.h"
 #include "./limine.h"
 
@@ -10,16 +11,7 @@ extern limine_boot_time_request boot_time_request;
 
 char buffer[33] = {};
 
-void assert(bool condition)
-{
-	if (!condition)
-	{
-		Renderer::print("\x1b[31mAssertion failed!\n");
-		while (true) __asm__ __volatile__("hlt");
-	}
-}
-
-extern "C" [[noreturn]] void kernelMain()
+void initRenderer()
 {
 	Renderer::init();
 	Renderer::clear(BLACK);
@@ -77,5 +69,14 @@ extern "C" [[noreturn]] void kernelMain()
 	}
 
 	Renderer::print("\n\x1b[0mSystem ready.\n");
-	while (true) __asm__ __volatile__("hlt");
+}
+
+extern "C" [[noreturn]] void kernelMain()
+{
+	GDTManager::init();
+	GDTManager::load();
+	GDTManager::setTSS(0x800000);
+
+	initRenderer();
+	while (true) asm volatile ("hlt");
 }
