@@ -53,7 +53,7 @@ foreach (asset ${EMBED_ASSETS})
 
     add_custom_command(
             OUTPUT ${obj_file}
-            COMMAND ${OBJCOPY_EXECUTABLE} --input-target=binary --output-target=elf64-x86-64 --binary-architecture=i386 --rename-section .data=.assets,alloc,load,readonly,data ${asset} ${obj_file}
+            COMMAND ${OBJCOPY_EXECUTABLE} -I binary -O elf64-x86-64 -B i386 ${asset} ${obj_file}
             DEPENDS ${asset}
             COMMENT "📦 Embedding ${rel_path}"
     )
@@ -70,8 +70,8 @@ add_custom_command(
         COMMAND ${CMAKE_COMMAND} -E copy ${OUT_DIR}/mesh.elf ${ISO_ROOT}
         COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_SOURCE_DIR}/lib/limine.conf ${ISO_ROOT}/boot/limine/limine.conf
         COMMAND ${CMAKE_COMMAND} -E copy ${LIMINE_ROOT}/limine-bios.sys ${LIMINE_ROOT}/limine-bios-cd.bin ${LIMINE_ROOT}/limine-uefi-cd.bin ${ISO_ROOT}/boot/limine
-        COMMAND ${XORRISO_EXECUTABLE} -as mkisofs -b boot/limine/limine-bios-cd.bin -no-emul-boot -boot-load-size 4 -boot-info-table --efi-boot boot/limine/limine-uefi-cd.bin -efi-boot-part --efi-boot-image --protective-msdos-label ${ISO_ROOT} -o ${OUT_DIR}/Mesh.iso
-        COMMAND ${LIMINE_EXECUTABLE} bios-install ${OUT_DIR}/Mesh.iso
+        COMMAND ${XORRISO_EXECUTABLE} -as mkisofs -b boot/limine/limine-bios-cd.bin -no-emul-boot -boot-load-size 4 -boot-info-table --efi-boot boot/limine/limine-uefi-cd.bin -efi-boot-part --efi-boot-image --protective-msdos-label ${ISO_ROOT} -o ${OUT_DIR}/Mesh.iso >/dev/null 2>&1
+        COMMAND ${LIMINE_EXECUTABLE} bios-install ${OUT_DIR}/Mesh.iso >/dev/null 2>&1
         DEPENDS mesh.elf
         COMMENT "📀 Creating bootable ISO"
 )

@@ -10,19 +10,21 @@ void Renderer::init()
 	if (!framebuffer_request.response || framebuffer_request.response->framebuffer_count < 1) return;
 
 	const auto* fb = framebuffer_request.response->framebuffers[0];
-	fbAddress = reinterpret_cast<uint32_t*>(hhdm_request.response->offset + reinterpret_cast<uint64_t>(fb->address));
+	fbAddress = static_cast<uint32_t*>(fb->address);
 	fbWidth = fb->width;
 	fbHeight = fb->height;
 	fbPitch = fb->pitch;
 
-	auto* header = reinterpret_cast<const PSF1Header*>(_binary__mnt_c_Users_srsfo_Downloads_Mesh_src_assets_fonts_zap_ext_light18_psf_start);
+	auto* header = reinterpret_cast<const PSF1Header*>(
+		_binary__mnt_c_Users_srsfo_Downloads_Mesh_src_assets_fonts_zap_ext_light18_psf_start);
 	if (header->magic[0] != 0x36 || header->magic[1] != 0x04)
 	{
 		fbAddress = nullptr;
 		return;
 	}
 
-	font.glyphBuffer = _binary__mnt_c_Users_srsfo_Downloads_Mesh_src_assets_fonts_zap_ext_light18_psf_start + sizeof(PSF1Header);
+	font.glyphBuffer = _binary__mnt_c_Users_srsfo_Downloads_Mesh_src_assets_fonts_zap_ext_light18_psf_start + sizeof(
+		PSF1Header);
 	font.width = 8;
 	font.height = header->charSize;
 	font.glyphCount = (header->mode & 1) ? 512 : 256;
@@ -34,9 +36,26 @@ void Renderer::setCursor(const uint32_t x, const uint32_t y)
 	cursorY = (y >= fbHeight / font.height) ? (fbHeight / font.height - 1) : y;
 }
 
+void Renderer::scroll()
+{
+	if (!fbAddress || font.height == 0 || font.width == 0) return;
+
+	const uint32_t rows = fbHeight / font.height;
+	const uint32_t visibleRows = rows - 1;
+	const uint32_t pixelsPerLine = fbPitch / 4;
+	const uint32_t linesToMove = visibleRows * font.height;
+
+	for (uint32_t y = 0; y < linesToMove; ++y)
+		for (uint32_t x = 0; x < fbWidth; ++x)
+			fbAddress[y * pixelsPerLine + x] = fbAddress[(y + font.height) * pixelsPerLine + x];
+	for (uint32_t y = linesToMove; y < fbHeight; ++y)
+		for (uint32_t x = 0; x < fbWidth; ++x) fbAddress[y * pixelsPerLine + x] = 0;
+}
+
 void Renderer::clear(const uint32_t color)
 {
 	if (!fbAddress) return;
+
 	for (uint64_t y = 0; y < fbHeight; ++y)
 		for (uint64_t x = 0; x < fbWidth; ++x) fbAddress[y * (fbPitch / 4) + x] = color;
 	cursorX = cursorY = 0;
@@ -65,8 +84,8 @@ void Renderer::printChar(const char c, const uint32_t fg, const uint32_t bg)
 	}
 	if (cursorY >= fbHeight / font.height)
 	{
-		// TODO: Implement scrolling
-		cursorY = fbHeight / font.height - 1;
+		scroll();
+		cursorY--;
 	}
 
 	drawGlyph(cursorX * font.width, cursorY * font.height, c, fg, bg);
@@ -85,22 +104,26 @@ void Renderer::print(const char* str, const uint32_t fgDefault, const uint32_t b
 {
 	uint32_t fg = fgDefault, bg = bgDefault;
 	bool inEscape = false;
-	char escBuf[ESCAPE_SIZE] = {};
+	char escBuf[16];
 	int escLen = 0;
 
 	for (size_t i = 0; str[i]; ++i)
 	{
 		const char c = str[i];
+
 		if (inEscape)
 		{
-			if (escLen < static_cast<int>(sizeof(escBuf) - 1)) escBuf[escLen++] = c;
-			if ((c >= '@' && c <= '~') || escLen >= 15)
+			if (c == 'm')
 			{
 				escBuf[escLen] = '\0';
-				escapeAnsi(escBuf, fg, bg, fgDefault, bgDefault);
+				if (escLen > 0 && escBuf[0] == '[') escapeAnsi(escBuf + 1, fg, bg, fgDefault, bgDefault);
 				inEscape = false;
 				escLen = 0;
+
+				continue;
 			}
+			if (escLen + 1 < static_cast<int>(sizeof(escBuf))) escBuf[escLen++] = c;
+
 			continue;
 		}
 		if (c == '\x1B')
@@ -125,7 +148,7 @@ void Renderer::printAt(const uint32_t x, const uint32_t y, const char* str, cons
 inline void Renderer::drawGlyph(const uint32_t px, const uint32_t py, const char c, const uint32_t fg,
                                 const uint32_t bg)
 {
-	if (static_cast<uint8_t>(c) >= font.glyphCount) return;
+	if (!font.glyphBuffer || font.height == 0 || font.width == 0 || static_cast<uint8_t>(c) >= font.glyphCount) return;
 
 	const uint8_t* glyph = font.glyphBuffer + static_cast<uint8_t>(c) * font.height;
 	for (uint32_t y = 0; y < font.height && py + y < fbHeight; ++y)
@@ -136,11 +159,9 @@ inline void Renderer::drawGlyph(const uint32_t px, const uint32_t py, const char
 void Renderer::escapeAnsi(const char* seq, uint32_t& fg, uint32_t& bg, const uint32_t fgDefault,
                           const uint32_t bgDefault)
 {
-	if (seq[0] != '[') return;
-
-	char buf[ESCAPE_SIZE];
+	char buf[16];
 	size_t len = 0;
-	for (size_t i = 1; seq[i] && len < sizeof(buf) - 1; ++i) buf[len++] = seq[i];
+	for (size_t i = 0; seq[i] && len < sizeof(buf) - 1; ++i) buf[len++] = seq[i];
 	buf[len] = '\0';
 
 	const char* token = strtok(buf, ";");

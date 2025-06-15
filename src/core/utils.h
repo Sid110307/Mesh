@@ -38,6 +38,13 @@ enum Color
 };
 
 int atoi(const char* str);
-const char* itoa(uint64_t value);
+char* utoa(uint64_t value, char* buffer, size_t bufferSize, uint8_t base = 10, bool uppercase = true);
 char* strchr(const char* str, int c);
 char* strtok(char* str, const char* delim);
+
+void* memcpy(void* dest, const void* src, size_t n);
+void* memset(void* dest, int c, size_t n);
+void* memmove(void* dest, const void* src, size_t n);
+
+uint8_t inb(uint16_t port);
+void outb(uint16_t port, uint8_t val);

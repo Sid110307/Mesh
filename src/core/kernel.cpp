@@ -8,62 +8,65 @@ extern limine_kernel_address_request kernel_addr_request;
 extern limine_smp_request smp_request;
 extern limine_boot_time_request boot_time_request;
 
+char buffer[33] = {0};
+
 extern "C" [[noreturn]] void kernelMain()
 {
 	Renderer::init();
 	Renderer::clear(BLACK);
-	Renderer::print("\x1b[32mMesh Booted Successfully!\n\n", GREEN, BLACK);
+	Renderer::print("\x1b[32mMesh Booted Successfully!\n\n");
 
 	if (framebuffer_request.response)
 	{
-		Renderer::print("\x1b[36mFramebuffer Info:\n", CYAN, BLACK);
-		Renderer::print(" - Resolution: ", WHITE, BLACK);
-		Renderer::print(itoa(framebuffer_request.response->framebuffers[0]->width), WHITE, BLACK);
-		Renderer::print("x", WHITE, BLACK);
-		Renderer::print(itoa(framebuffer_request.response->framebuffers[0]->height), WHITE, BLACK);
-		Renderer::print("\n\n", WHITE, BLACK);
+		Renderer::print("\x1b[36mFramebuffer Info:\n");
+		Renderer::print(" - Resolution: ");
+		Renderer::print(utoa(framebuffer_request.response->framebuffers[0]->width, buffer, sizeof(buffer)));
+		Renderer::print("x");
+		Renderer::print(utoa(framebuffer_request.response->framebuffers[0]->height, buffer, sizeof(buffer)));
+		Renderer::print("\n\n");
 	}
 	else
 	{
-		Renderer::print("\x1b[31mFramebuffer request failed!\n", RED, BLACK);
-		Renderer::print(" - No framebuffer available.\n\n", WHITE, BLACK);
+		Renderer::print("\x1b[31mFramebuffer request failed!\n");
+		Renderer::print(" - No framebuffer available.\n\n");
 	}
 
 	if (memory_request.response)
 	{
-		Renderer::print("\x1b[35mMemory Map:\n", MAGENTA, BLACK);
-		Renderer::print(" - Entries: ", WHITE, BLACK);
-		Renderer::print(itoa(memory_request.response->entry_count), WHITE, BLACK);
-		Renderer::print("\n\n", WHITE, BLACK);
+		Renderer::print("\x1b[35mMemory Map:\n");
+		Renderer::print(" - Entries: ");
+		Renderer::print(utoa(memory_request.response->entry_count, buffer, sizeof(buffer)));
+		Renderer::print("\n\n");
 	}
 	if (hhdm_request.response)
 	{
-		Renderer::print("\x1b[34mHHDM Base: 0x", BLUE, BLACK);
-		Renderer::print(itoa(hhdm_request.response->offset), WHITE, BLACK);
-		Renderer::print("\n\n", WHITE, BLACK);
+		Renderer::print("\x1b[34mHHDM Base: ");
+		Renderer::print("0x");
+		Renderer::print(utoa(hhdm_request.response->offset, buffer, sizeof(buffer), 16));
+		Renderer::print("\n\n");
 	}
 	if (kernel_addr_request.response)
 	{
-		Renderer::print("\x1b[33mKernel Address Range:\n", YELLOW, BLACK);
-		Renderer::print(" - Physical base: 0x", WHITE, BLACK);
-		Renderer::print(itoa(kernel_addr_request.response->physical_base), WHITE, BLACK);
-		Renderer::print("\n - Virtual base:  0x", WHITE, BLACK);
-		Renderer::print(itoa(kernel_addr_request.response->virtual_base), WHITE, BLACK);
-		Renderer::print("\n\n", WHITE, BLACK);
+		Renderer::print("\x1b[33mKernel Address Range:\n");
+		Renderer::print(" - Physical base: 0x");
+		Renderer::print(utoa(kernel_addr_request.response->physical_base, buffer, sizeof(buffer), 16));
+		Renderer::print("\n - Virtual base:  0x");
+		Renderer::print(utoa(kernel_addr_request.response->virtual_base, buffer, sizeof(buffer), 16));
+		Renderer::print("\n\n");
 	}
 	if (boot_time_request.response)
 	{
-		Renderer::print("\x1b[36mBoot Time (UNIX): ", CYAN, BLACK);
-		Renderer::print(itoa(boot_time_request.response->boot_time), WHITE, BLACK);
-		Renderer::print("\n", WHITE, BLACK);
+		Renderer::print("\x1b[36mBoot Time (UNIX): ");
+		Renderer::print(utoa(boot_time_request.response->boot_time, buffer, sizeof(buffer)));
+		Renderer::print("\n");
 	}
 	if (smp_request.response && smp_request.response->cpu_count > 0)
 	{
-		Renderer::print("\x1b[32mSMP CPUs Detected: ", GREEN, BLACK);
-		Renderer::print(itoa(smp_request.response->cpu_count), WHITE, BLACK);
-		Renderer::print("\n", WHITE, BLACK);
+		Renderer::print("\x1b[32mSMP CPUs Detected: ");
+		Renderer::print(utoa(smp_request.response->cpu_count, buffer, sizeof(buffer)));
+		Renderer::print("\n");
 	}
 
-	Renderer::print("\n\x1b[0mSystem ready.\n", WHITE, BLACK);
+	Renderer::print("\n\x1b[0mSystem ready.\n");
 	while (true) __asm__ __volatile__("hlt");
 }

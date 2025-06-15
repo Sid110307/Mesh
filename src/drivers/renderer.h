@@ -17,12 +17,13 @@ class Renderer
 {
 public:
 	static void init();
+	static void setCursor(uint32_t x, uint32_t y);
 	static void clear(uint32_t color);
-	static void print(const char* str, uint32_t fg = WHITE, uint32_t bg = BLACK);
-	static void printAt(uint32_t x, uint32_t y, const char* str, uint32_t fg = WHITE, uint32_t bg = BLACK);
 	static void printChar(char c, uint32_t fg = WHITE, uint32_t bg = BLACK);
 	static void printCharAt(uint32_t x, uint32_t y, char c, uint32_t fg = WHITE, uint32_t bg = BLACK);
-	static void setCursor(uint32_t x, uint32_t y);
+	static void print(const char* str, uint32_t fg = WHITE, uint32_t bg = BLACK);
+	static void printAt(uint32_t x, uint32_t y, const char* str, uint32_t fg = WHITE, uint32_t bg = BLACK);
+	static void scroll();
 
 private:
 	inline static void drawGlyph(uint32_t px, uint32_t py, char c, uint32_t fg, uint32_t bg);
@@ -32,5 +33,4 @@ private:
 	inline static uint32_t* fbAddress = nullptr;
 	inline static uint32_t cursorX = 0, cursorY = 0;
 	inline static Font font;
-	static constexpr size_t ESCAPE_SIZE = 16;
 };

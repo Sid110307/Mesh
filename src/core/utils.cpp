@@ -22,26 +22,35 @@ int atoi(const char* str)
 	return negative ? -result : result;
 }
 
-const char* itoa(uint64_t value)
+char* utoa(uint64_t value, char* buffer, const size_t bufferSize, const uint8_t base, const bool uppercase)
 {
-	static char buffer[17];
-	int index = 16;
+	if (!buffer || bufferSize < 2 || base < 2 || base > 36) return nullptr;
+
+	static constexpr auto digitsLower = "0123456789abcdefghijklmnopqrstuvwxyz";
+	static constexpr auto digitsUpper = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+	const char* digits = uppercase ? digitsUpper : digitsLower;
+
+	int index = static_cast<int>(bufferSize - 1);
 	buffer[index--] = '\0';
 
-	if (value == 0) buffer[index--] = '0';
+	if (value == 0)
+	{
+		if (index < 0) return nullptr;
+		buffer[index--] = '0';
+	}
 	else
+	{
 		while (value > 0 && index >= 0)
 		{
-			const uint8_t digit = value & 0xF;
-
-			buffer[index--] = static_cast<char>(digit < 10 ? '0' + digit : 'A' + digit - 10);
-			value >>= 4;
+			buffer[index--] = digits[value % base];
+			value /= base;
 		}
+	}
 
 	return &buffer[index + 1];
 }
 
-char* strchr(const char* str, int c)
+char* strchr(const char* str, const int c)
 {
 	while (*str)
 	{
@@ -72,3 +81,61 @@ char* strtok(char* str, const char* delim)
 
 	return tokenStart;
 }
+
+void* memcpy(void* dest, const void* src, size_t n)
+{
+	if (!dest || !src || n == 0) return dest;
+
+	auto d = static_cast<char*>(dest);
+	auto s = static_cast<const char*>(src);
+
+	if (n >= 4 && reinterpret_cast<uintptr_t>(d) % 4 == 0 && reinterpret_cast<uintptr_t>(s) % 4 == 0)
+		while (n >= 4)
+		{
+			*reinterpret_cast<uint32_t*>(d) = *reinterpret_cast<const uint32_t*>(s);
+
+			d += 4;
+			s += 4;
+			n -= 4;
+		}
+
+	while (n--) *d++ = *s++;
+	return dest;
+}
+
+void* memset(void* dest, const int c, size_t n)
+{
+	if (!dest || n == 0) return dest;
+
+	auto d = static_cast<char*>(dest);
+	while (n--) *d++ = static_cast<char>(c);
+	return dest;
+}
+
+void* memmove(void* dest, const void* src, size_t n)
+{
+	if (!dest || !src || n == 0 || dest == src) return dest;
+
+	auto d = static_cast<char*>(dest);
+	auto s = static_cast<const char*>(src);
+
+	if (d < s || d >= s + n) while (n--) *d++ = *s++;
+	else
+	{
+		d += n;
+		s += n;
+
+		while (n--) *--d = *--s;
+	}
+
+	return dest;
+}
+
+uint8_t inb(uint16_t port)
+{
+	uint8_t ret;
+	asm volatile ("inb %1, %0" : "=a"(ret) : "Nd"(port));
+	return ret;
+}
+
+void outb(uint16_t port, uint8_t val) { asm volatile ("outb %0, %1" : : "a"(val), "Nd"(port)); }
