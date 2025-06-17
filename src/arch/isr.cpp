@@ -1,7 +1,6 @@
 #include "./isr.h"
 
-#include <drivers/io.h>
-
+#include "../memory/paging.h"
 #include "../drivers/renderer.h"
 
 const char* exceptionMessages[32] = {
@@ -17,13 +16,38 @@ char buffer[32];
 
 static void showException(uint64_t intNum, uint64_t errorCode)
 {
-	Renderer::print("\x1b[31mException Raised: ");
+	Renderer::setSerialPrint(true);
+
+	Renderer::print("\x1b[31m\nException Raised: ");
 	Renderer::print(intNum < 32 ? exceptionMessages[intNum] : "Unknown");
-	Renderer::print("\nInterrupt: ");
-	Renderer::print(utoa(intNum, buffer, sizeof(buffer)));
-	Renderer::print(" | Error Code: ");
-	Renderer::print(utoa(errorCode, buffer, sizeof(buffer), 16));
-	Renderer::print("\nSystem Halted.\x1b[0m\n");
+	Renderer::print(" (");
+	Renderer::printDec(intNum);
+	Renderer::print(")\n");
+
+	if (intNum == 14)
+	{
+		uint64_t faultAddr;
+		asm volatile("mov %%cr2, %0" : "=r"(faultAddr));
+
+		Renderer::print("Address: 0x");
+		Renderer::printHex(faultAddr);
+		Renderer::print("\n");
+		Renderer::print("Error Code: 0x");
+		Renderer::printHex(errorCode);
+		Renderer::print(" (");
+		Renderer::printDec(errorCode);
+		Renderer::print(")\n");
+
+		Renderer::print("Page Fault Details:\n");
+		if (!(errorCode & 1)) Renderer::print(" - Page not present\n");
+		if (errorCode & 2) Renderer::print(" - Write operation\n");
+		if (errorCode & 4) Renderer::print(" - User mode access\n");
+		if (errorCode & 8) Renderer::print(" - Reserved bit violation\n");
+		if (errorCode & 16) Renderer::print(" - Instruction fetch\n");
+	}
+
+	Renderer::setSerialPrint(false);
+	Renderer::print("System Halted.\x1b[0m\n");
 
 	while (true) asm volatile("hlt");
 }

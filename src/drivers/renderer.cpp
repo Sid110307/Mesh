@@ -17,9 +17,9 @@ void Renderer::init()
 	if (fb->memory_model != LIMINE_FRAMEBUFFER_RGB || fb->bpp != 32)
 	{
 		Serial::write("Renderer: Unsupported framebuffer format (memory model: ");
-		Serial::write(fb->memory_model);
+		Serial::writeDec(fb->memory_model);
 		Serial::write(", bpp: ");
-		Serial::write(fb->bpp);
+		Serial::writeDec(fb->bpp);
 		Serial::write(").\n");
 
 		fbAddress = nullptr;
@@ -92,11 +92,15 @@ void Renderer::printChar(const char c, const uint32_t fg, const uint32_t bg)
 	{
 		cursorX = 0;
 		++cursorY;
+
+		if (serialPrint) Serial::write('\n');
 		return;
 	}
 	if (c == '\r')
 	{
 		cursorX = 0;
+		if (serialPrint) Serial::write('\r');
+
 		return;
 	}
 
@@ -113,14 +117,15 @@ void Renderer::printChar(const char c, const uint32_t fg, const uint32_t bg)
 
 	drawGlyph(cursorX * font.width, cursorY * font.height, c, fg, bg);
 	++cursorX;
+
+	if (serialPrint) Serial::write(c);
 }
 
 void Renderer::printCharAt(const uint32_t x, const uint32_t y, const char c, const uint32_t fg, const uint32_t bg)
 {
 	if (!fbAddress || c == '\n' || c == '\r')
 	{
-		Serial::write(
-			"Renderer: Cannot print character at position, framebuffer not initialized or invalid character.\n");
+		Serial::write("Renderer: Cannot print character, framebuffer not initialized or invalid character.\n");
 		return;
 	}
 	if (x >= fbWidth / font.width || y >= fbHeight / font.height)
@@ -130,6 +135,7 @@ void Renderer::printCharAt(const uint32_t x, const uint32_t y, const char c, con
 	}
 
 	drawGlyph(x * font.width, y * font.height, c, fg, bg);
+	if (serialPrint) Serial::write(c);
 }
 
 void Renderer::print(const char* str, const uint32_t fgDefault, const uint32_t bgDefault)
@@ -176,6 +182,35 @@ void Renderer::printAt(const uint32_t x, const uint32_t y, const char* str, cons
 	setCursor(x, y);
 	print(str, fgDefault, bgDefault);
 }
+
+void Renderer::printHex(const uint64_t value, const uint32_t fg, const uint32_t bg)
+{
+	char buffer[33];
+	print(utoa(value, buffer, sizeof(buffer), 16), fg, bg);
+}
+
+void Renderer::printHexAt(const uint32_t x, const uint32_t y, const uint64_t value, const uint32_t fg,
+                          const uint32_t bg)
+{
+	setCursor(x, y);
+	printHex(value, fg, bg);
+}
+
+void Renderer::printDec(const uint64_t value, const uint32_t fg, const uint32_t bg)
+{
+	char buffer[33];
+	print(utoa(value, buffer, sizeof(buffer)), fg, bg);
+}
+
+void Renderer::printDecAt(const uint32_t x, const uint32_t y, const uint64_t value, const uint32_t fg,
+                          const uint32_t bg)
+{
+	setCursor(x, y);
+	printDec(value, fg, bg);
+}
+
+bool Renderer::getSerialPrint() { return serialPrint; }
+void Renderer::setSerialPrint(const bool value) { serialPrint = value; }
 
 inline void Renderer::drawGlyph(const uint32_t px, const uint32_t py, const char c, const uint32_t fg,
                                 const uint32_t bg)

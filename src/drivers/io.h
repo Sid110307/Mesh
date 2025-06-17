@@ -10,8 +10,10 @@ class Serial
 public:
 	static void init();
 	static void write(const char* str);
-	static void write(uint8_t byte);
 	static void write(const char* str, size_t len);
+	static void write(uint8_t byte);
+	static void writeHex(uint64_t value);
+	static void writeDec(uint64_t value);
 
 private:
 	static void writeByte(uint8_t byte);

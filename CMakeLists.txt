@@ -64,7 +64,7 @@ foreach (asset ${EMBED_ASSETS})
             COMMAND ${OBJCOPY_EXECUTABLE} --redefine-sym _binary_${orig}_end=${symbol_base}_end ${obj_file}
             COMMAND ${OBJCOPY_EXECUTABLE} --redefine-sym _binary_${orig}_size=${symbol_base}_size ${obj_file}
             DEPENDS ${asset}
-            COMMENT "📦 Embedding asset ${rel_path} as symbol ${symbol_name}"
+            COMMENT "📦 Embedding asset ${rel_path}"
     )
     list(APPEND EMBED_ASSET_OBJS ${obj_file})
 endforeach ()
@@ -72,7 +72,6 @@ endforeach ()
 add_custom_target(embedded_assets ALL DEPENDS ${EMBED_ASSET_OBJS})
 add_executable(mesh.elf ${ASM_NASM_SRC} ${C_SRC} ${CPP_SRC} ${EMBED_ASSET_OBJS})
 add_dependencies(mesh.elf embedded_assets)
-
 set_source_files_properties(src/arch/isr.cpp PROPERTIES COMPILE_FLAGS "-mno-sse -mno-sse2 -mno-mmx -mno-80387")
 
 add_custom_command(

@@ -59,20 +59,20 @@ void GDTManager::setTSS(uint64_t rsp0)
 	memset(&kernelTSS, 0, sizeof(kernelTSS));
 	kernelTSS.rsp[0] = rsp0;
 	kernelTSS.ioMapBase = sizeof(kernelTSS);
-
-	extern uint64_t ist1StackTop;
 	kernelTSS.ist[0] = ist1StackTop;
 
 	auto base = reinterpret_cast<uint64_t>(&kernelTSS);
-	uint32_t limit = sizeof(kernelTSS) - 1;
-	setEntry(GDT_TSS, static_cast<uint32_t>(base), limit, 0x89, 0x00);
+	uint32_t limit = sizeof(TSS) - 1;
 
-	gdt[GDT_TSS + 1].limitLow = limit >> 16;
-	gdt[GDT_TSS + 1].baseLow = base >> 48;
-	gdt[GDT_TSS + 1].baseMid = (base >> 32) & 0xFF;
-	gdt[GDT_TSS + 1].access = 0;
-	gdt[GDT_TSS + 1].flagsLimitHigh = 0;
-	gdt[GDT_TSS + 1].baseHigh = base >> 56;
+	gdt[GDT_TSS].limitLow = limit & 0xFFFF;
+	gdt[GDT_TSS].baseLow = base & 0xFFFF;
+	gdt[GDT_TSS].baseMid = (base >> 16) & 0xFF;
+	gdt[GDT_TSS].access = 0x89;
+	gdt[GDT_TSS].flagsLimitHigh = ((limit >> 16) & 0x0F) | (0x00);
+	gdt[GDT_TSS].baseHigh = (base >> 24) & 0xFF;
+
+	*reinterpret_cast<uint32_t*>(&gdt[GDT_TSS + 1]) = (base >> 32) & 0xFFFFFFFF;
+	*(reinterpret_cast<uint32_t*>(&gdt[GDT_TSS + 1]) + 1) = 0;
 
 	asm volatile ("ltr %0" :: "r"(static_cast<uint16_t>(GDT_TSS << 3)));
 }

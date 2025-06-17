@@ -7,7 +7,7 @@ uint8_t inb(uint16_t port)
 	return ret;
 }
 
-void outb(uint16_t port, uint8_t val) { asm volatile ("outb %0, %1" : : "a"(val), "Nd"(port)); }
+void outb(uint16_t port, uint8_t val) { asm volatile ("outb %0, %1" :: "a"(val), "Nd"(port)); }
 
 void Serial::init()
 {
@@ -30,12 +30,24 @@ void Serial::write(const char* str)
 	for (size_t i = 0; str[i] != '\0'; ++i) writeByte(static_cast<uint8_t>(str[i]));
 }
 
-void Serial::write(const uint8_t byte) { write(reinterpret_cast<const char*>(&byte), sizeof(byte)); }
-
 void Serial::write(const char* str, const size_t len)
 {
 	if (!initialized) init();
 	for (size_t i = 0; i < len; ++i) writeByte(static_cast<uint8_t>(str[i]));
+}
+
+void Serial::write(const uint8_t byte) { write(reinterpret_cast<const char*>(&byte), sizeof(byte)); }
+
+void Serial::writeHex(const uint64_t value)
+{
+	char buffer[33];
+	write(utoa(value, buffer, sizeof(buffer), 16));
+}
+
+void Serial::writeDec(const uint64_t value)
+{
+	char buffer[33];
+	write(utoa(value, buffer, sizeof(buffer)));
 }
 
 void Serial::writeByte(const uint8_t byte)
