@@ -10,19 +10,22 @@
 extern limine_smp_request smp_request;
 static Spinlock smpLock;
 
+alignas(16) static uint8_t kernelStacks[SMP::MAX_CPUS][SMP::SMP_STACK_SIZE];
 alignas(16) static uint8_t apStacks[SMP::MAX_CPUS][SMP::SMP_STACK_SIZE];
 static uint32_t lapicIDs[SMP::MAX_CPUS] = {};
+
 Atomic SMP::apReadyCount{0};
 uint32_t SMP::cpuCount = 0;
 
 extern "C" [[noreturn]] void apMain(void* arg)
 {
 	asm volatile ("mov %0, %%rsp" :: "r"(arg));
+	uint32_t cpuId = SMP::getLapicID();
 
 	GDTManager gdt;
 	GDTManager::load();
 	IDTManager::init();
-	gdt.setTSS(reinterpret_cast<uint64_t>(arg));
+	GDTManager::setTSS(cpuId, reinterpret_cast<uint64_t>(&kernelStacks[cpuId][SMP::SMP_STACK_SIZE]));
 
 	uint32_t id = SMP::getLapicID();
 	Serial::printf("[AP] Core with LAPIC ID %u is online\n", id);
@@ -57,6 +60,7 @@ void SMP::init()
 		}
 
 		lapicIDs[i] = cpu->lapic_id;
+		GDTManager::setTSS(i, reinterpret_cast<uint64_t>(&kernelStacks[i][SMP::SMP_STACK_SIZE]));
 		if (cpu->lapic_id == response->bsp_lapic_id) continue;
 
 		cpu->extra_argument = reinterpret_cast<uint64_t>(&apStacks[i][SMP_STACK_SIZE]);

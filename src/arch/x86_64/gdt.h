@@ -2,15 +2,6 @@
 
 #include "../../core/utils.h"
 
-enum : uint16_t
-{
-	GDT_NULL    = 0,
-	GDT_CODE    = 1,
-	GDT_DATA    = 2,
-	GDT_TSS     = 3,
-	GDT_ENTRIES = 5
-};
-
 struct __attribute__((packed)) GDTEntry
 {
 	uint16_t limitLow, baseLow;
@@ -35,9 +26,7 @@ class GDTManager
 public:
 	GDTManager();
 	static void load();
-	void setTSS(uint64_t rsp0);
-
-	TSS kernelTSS __attribute__((aligned(16))) = {};
+	static void setTSS(size_t cpuIndex, uint64_t rsp0);
 
 private:
 	static void setEntry(uint16_t index, uint32_t base, uint32_t limit, uint8_t access, uint8_t flags);
