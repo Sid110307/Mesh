@@ -9,6 +9,8 @@ class Serial
 {
 public:
 	static void init();
+	static void printf(const char* fmt, ...);
+
 	static void write(const char* str);
 	static void write(const char* str, size_t len);
 	static void write(uint8_t byte);

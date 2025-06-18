@@ -24,6 +24,22 @@ void Serial::init()
 	initialized = true;
 }
 
+void Serial::printf(const char* fmt, ...)
+{
+	if (!initialized) init();
+	if (!fmt || !*fmt)
+	{
+		write("Serial: Invalid format string.\n");
+		return;
+	}
+
+	va_list args;
+	va_start(args, fmt);
+	vformat(fmt, args, [](const char c) { write(c); }, [](const char* s) { write(s); },
+	        [](const uint64_t h) { writeHex(h); }, [](const uint64_t d) { writeDec(d); });
+	va_end(args);
+}
+
 void Serial::write(const char* str)
 {
 	if (!initialized) init();
@@ -52,8 +68,10 @@ void Serial::writeDec(const uint64_t value)
 
 void Serial::writeByte(const uint8_t byte)
 {
-	while (!(inb(port + 5) & 0x20))
+	int timeout = 100000;
+	while (!(inb(port + 5) & 0x20) && timeout--)
 	{
 	}
+
 	outb(port, byte);
 }

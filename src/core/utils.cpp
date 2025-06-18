@@ -155,3 +155,88 @@ void* memmove(void* dest, const void* src, size_t n)
 
 	return dest;
 }
+
+void vformat(const char* fmt, va_list args, const putCharFn putc, const putStrFn puts, const putHexFn putHex,
+             const putDecFn putDec)
+{
+	for (size_t i = 0; fmt[i]; ++i)
+	{
+		if (fmt[i] != '%')
+		{
+			putc(fmt[i]);
+			continue;
+		}
+
+		switch (const char spec = fmt[++i])
+		{
+			case '%':
+				putc('%');
+				break;
+			case 'c':
+				putc(static_cast<char>(va_arg(args, int)));
+				break;
+			case 's':
+			{
+				const char* str = va_arg(args, const char*);
+				puts(str ? str : "(null)");
+
+				break;
+			}
+			case 'd':
+			case 'i':
+			{
+				int val = va_arg(args, int);
+				if (val < 0)
+				{
+					putc('-');
+					val = -val;
+				}
+
+				putDec(static_cast<uint64_t>(val));
+				break;
+			}
+			case 'u':
+				putDec(va_arg(args, uint32_t));
+				break;
+			case 'x':
+			case 'X':
+				putHex(va_arg(args, uint64_t));
+				break;
+			case 'p':
+			{
+				if (void* ptr = va_arg(args, void*)) putHex(reinterpret_cast<uint64_t>(ptr));
+				else puts("(null)");
+
+				break;
+			}
+			case 'l':
+			{
+				if (const char next = fmt[++i]; next == 'd' || next == 'i')
+				{
+					long val = va_arg(args, long);
+					if (val < 0)
+					{
+						putc('-');
+						val = -val;
+					}
+
+					putDec(static_cast<uint64_t>(val));
+				}
+				else if (next == 'u') putDec(va_arg(args, unsigned long));
+				else if (next == 'x' || next == 'X') putHex(va_arg(args, unsigned long));
+				else
+				{
+					putc('%');
+					putc(next);
+				}
+
+				break;
+			}
+			default:
+				putc('%');
+				putc(spec);
+
+				break;
+		}
+	}
+}

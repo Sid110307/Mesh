@@ -14,46 +14,60 @@ const char* exceptionMessages[32] = {
 
 char buffer[32];
 
-static void showException(uint64_t intNum, uint64_t errorCode)
+static void showException(InterruptFrame* frame, uint64_t intNum, uint64_t errorCode)
 {
 	Renderer::setSerialPrint(true);
+	Renderer::printf("\x1b[31m\nException Raised: %s (%lu)\n", intNum < 32 ? exceptionMessages[intNum] : "Unknown",
+	                 intNum);
 
-	Renderer::print("\x1b[31m\nException Raised: ");
-	Renderer::print(intNum < 32 ? exceptionMessages[intNum] : "Unknown");
-	Renderer::print(" (");
-	Renderer::printDec(intNum);
-	Renderer::print(")\n");
+	if (intNum == 10 || intNum == 11 || intNum == 12 || intNum == 13)
+	{
+		const char* table;
+		switch (errorCode & 0b11)
+		{
+			case 0:
+				table = "GDT";
+				break;
+			case 1:
+				table = "IDT";
+				break;
+			case 2:
+				table = "LDT";
+				break;
+			default:
+				table = "Unknown";
+				break;
+		}
 
+		Renderer::printf("TSS Selector: Index = %lu, Table = %s\n", errorCode >> 3, table);
+	}
 	if (intNum == 14)
 	{
 		uint64_t faultAddr;
 		asm volatile("mov %%cr2, %0" : "=r"(faultAddr));
+		Renderer::printf("Address: 0x%lx\nError Code: 0x%lx (%lu)\nPage Fault Details:\n", faultAddr, errorCode,
+		                 errorCode);
 
-		Renderer::print("Address: 0x");
-		Renderer::printHex(faultAddr);
-		Renderer::print("\n");
-		Renderer::print("Error Code: 0x");
-		Renderer::printHex(errorCode);
-		Renderer::print(" (");
-		Renderer::printDec(errorCode);
-		Renderer::print(")\n");
-
-		Renderer::print("Page Fault Details:\n");
-		if (!(errorCode & 1)) Renderer::print(" - Page not present\n");
-		if (errorCode & 2) Renderer::print(" - Write operation\n");
-		if (errorCode & 4) Renderer::print(" - User mode access\n");
-		if (errorCode & 8) Renderer::print(" - Reserved bit violation\n");
-		if (errorCode & 16) Renderer::print(" - Instruction fetch\n");
+		if (!(errorCode & 1)) Renderer::printf("- Page not present\n");
+		if (errorCode & 2) Renderer::printf("- Write operation\n");
+		if (errorCode & 4) Renderer::printf("- User mode access\n");
+		if (errorCode & 8) Renderer::printf("- Reserved bit violation\n");
+		if (errorCode & 16) Renderer::printf("- Instruction fetch\n");
+		if (errorCode & (1 << 5)) Renderer::printf("- Protection-key violation\n");
+		if (errorCode & (1 << 6)) Renderer::printf("- Shadow stack access violation\n");
+		if (errorCode & (1 << 15)) Renderer::printf("- SGX access violation\n");
 	}
 
+	Renderer::printf("RIP: 0x%lx\nCS: 0x%lx\nRSP: 0x%lx\nSS: 0x%lx\nRFLAGS: 0x%lx\n", frame->rip, frame->cs, frame->rsp,
+	                 frame->ss, frame->rflags);
 	Renderer::setSerialPrint(false);
-	Renderer::print("System Halted.\x1b[0m\n");
+	Renderer::printf("System Halted.\x1b[0m\n");
 
 	while (true) asm volatile("hlt");
 }
 
-#define ISR_NOERR(n) __attribute__((interrupt)) void isr##n(InterruptFrame*) { showException(n, 0); }
-#define ISR_ERR(n) __attribute__((interrupt)) void isr##n(InterruptFrame*, uint64_t error) { showException(n, error); }
+#define ISR_NOERR(n) __attribute__((interrupt)) void isr##n(InterruptFrame* frame) { showException(frame, n, 0); }
+#define ISR_ERR(n) __attribute__((interrupt)) void isr##n(InterruptFrame* frame, uint64_t error) { showException(frame, n, error); }
 
 ISR_NOERR(0)
 ISR_NOERR(1)

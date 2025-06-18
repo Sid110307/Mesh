@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <cstddef>
 #include <climits>
+#include <cstdarg>
 
 enum Color
 {
@@ -33,3 +34,10 @@ char* strtok_r(char* str, const char* delim, char** savePtr);
 void* memcpy(void* dest, const void* src, size_t n);
 void* memset(void* dest, int c, size_t n);
 void* memmove(void* dest, const void* src, size_t n);
+
+using putCharFn = void(*)(char);
+using putStrFn = void(*)(const char*);
+using putHexFn = void(*)(uint64_t);
+using putDecFn = void(*)(uint64_t);
+
+void vformat(const char* fmt, va_list args, putCharFn putc, putStrFn puts, putHexFn putHex, putDecFn putDec);

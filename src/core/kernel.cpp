@@ -15,81 +15,46 @@ void initRenderer()
 {
 	Renderer::init();
 	Renderer::clear(BLACK);
-	Renderer::print("\x1b[32mMesh Booted Successfully!\n");
+	Renderer::printf("\x1b[92mMesh Booted Successfully!\n");
 
-	if (framebuffer_request.response)
-	{
-		Renderer::print("\x1b[36mFramebuffer Info:\n");
-		Renderer::print(" - Resolution: ");
-		Renderer::printDec(framebuffer_request.response->framebuffers[0]->width);
-		Renderer::print("x");
-		Renderer::printDec(framebuffer_request.response->framebuffers[0]->height);
-		Renderer::print("\n");
-	}
-	else
-	{
-		Renderer::print("\x1b[31mFramebuffer request failed!\n");
-		Renderer::print(" - No framebuffer available.\n");
-	}
-
-	if (memory_request.response)
-	{
-		Renderer::print("\x1b[35mMemory Map:\n");
-		Renderer::print(" - Entries: ");
-		Renderer::printDec(memory_request.response->entry_count);
-		Renderer::print("\n");
-	}
-	if (hhdm_request.response)
-	{
-		Renderer::print("\x1b[34mHHDM Base: ");
-		Renderer::print("0x");
-		Renderer::printHex(hhdm_request.response->offset);
-		Renderer::print("\n");
-	}
-	if (kernel_addr_request.response)
-	{
-		Renderer::print("\x1b[33mKernel Address Range:\n");
-		Renderer::print(" - Physical base: 0x");
-		Renderer::printHex(kernel_addr_request.response->physical_base);
-		Renderer::print("\n - Virtual base:  0x");
-		Renderer::printHex(kernel_addr_request.response->virtual_base);
-		Renderer::print("\n");
-	}
-	if (boot_time_request.response)
-	{
-		Renderer::print("\x1b[36mBoot Time (UNIX): ");
-		Renderer::printDec(boot_time_request.response->boot_time);
-		Renderer::print("\n");
-	}
-	if (smp_request.response && smp_request.response->cpu_count > 0)
-	{
-		Renderer::print("\x1b[32mSMP CPUs Detected: ");
-		Renderer::printDec(smp_request.response->cpu_count);
-		Renderer::print("\n");
-	}
+	if (framebuffer_request.response) Renderer::printf("\x1b[36m[Framebuffer] \x1b[96m%ux%u\x1b[0m\n",
+	                                                   framebuffer_request.response->framebuffers[0]->width,
+	                                                   framebuffer_request.response->framebuffers[0]->height);
+	else Renderer::printf("\x1b[31m[Error] Framebuffer request failed!\n\x1b[91m- No framebuffer available.\n");
+	if (memory_request.response) Renderer::printf("\x1b[36m[Memory Map] \x1b[96m%u entries\x1b[0m\n",
+	                                              memory_request.response->entry_count);
+	if (hhdm_request.response) Renderer::printf("\x1b[36m[HHDM Base] \x1b[96m0x%lx\x1b[0m\n",
+	                                            hhdm_request.response->offset);
+	if (kernel_addr_request.response) Renderer::printf(
+		"\x1b[36m[Kernel Range]\n \x1b[90m-\x1b[0m Physical: 0x%lx\n \x1b[90m-\x1b[0m Virtual: 0x%lx\n",
+		kernel_addr_request.response->physical_base, kernel_addr_request.response->virtual_base);
+	if (boot_time_request.response) Renderer::printf("\x1b[36m[Boot Time] \x1b[96m%lu\x1b[0m seconds since epoch\n",
+	                                                 boot_time_request.response->boot_time);
+	if (smp_request.response && smp_request.response->cpu_count > 0) Renderer::printf(
+		"\x1b[36m[SMP] \x1b[96m%u CPUs Detected\x1b[0m\n", smp_request.response->cpu_count);
 }
 
 void initGDT()
 {
-	Renderer::print("\x1b[36mInitializing GDT... ");
+	Renderer::printf("\x1b[36mInitializing GDT... ");
 	static uint8_t kernelStack[8192] __attribute__((aligned(16)));
 
 	GDTManager::init();
 	GDTManager::load();
 	GDTManager::setTSS(reinterpret_cast<uint64_t>(kernelStack + sizeof(kernelStack)));
-	Renderer::print("\x1b[32mDone!\n");
+	Renderer::printf("\x1b[32mDone!\n");
 }
 
 void initIDT()
 {
-	Renderer::print("\x1b[36mInitializing IDT... ");
+	Renderer::printf("\x1b[36mInitializing IDT... ");
 	IDTManager::init();
-	Renderer::print("\x1b[32mDone!\n");
+	Renderer::printf("\x1b[32mDone!\n");
 }
 
 void initPaging()
 {
-	Renderer::print("\x1b[36mInitializing Paging... ");
+	Renderer::printf("\x1b[36mInitializing Paging... ");
 	uint64_t base = 0, size = 0;
 
 	for (size_t i = 0; i < memory_request.response->entry_count; ++i)
@@ -108,13 +73,13 @@ void initPaging()
 
 	if (!base)
 	{
-		Renderer::print("\x1b[31mFailed to find usable memory!\n");
+		Renderer::printf("\x1b[31mFailed to find usable memory!\n");
 		while (true) asm volatile("hlt");
 	}
 
 	FrameAllocator::init(base, size);
 	Paging::init();
-	Renderer::print("\x1b[32mDone!\n");
+	Renderer::printf("\x1b[32mDone!\n");
 }
 
 extern "C" [[noreturn]] void kernelMain()
