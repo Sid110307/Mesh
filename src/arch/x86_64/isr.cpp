@@ -3,59 +3,188 @@
 #include "../../memory/paging.h"
 #include "../../drivers/video/renderer.h"
 
-const char* exceptionMessages[32] = {
-	"Divide by Zero", "Debug", "Non-maskable Interrupt", "Breakpoint", "Overflow", "Bound Range Exceeded",
-	"Invalid Opcode", "Device Not Available", "Double Fault", "Coprocessor Segment Overrun", "Invalid TSS",
-	"Segment Not Present", "Stack-Segment Fault", "General Protection Fault", "Page Fault", "Reserved",
-	"Floating-Point Error", "Alignment Check", "Machine Check", "SIMD Floating-Point Exception",
-	"Virtualization Exception", "Control Protection Exception", "Reserved", "Reserved", "Reserved", "Reserved",
-	"Reserved", "Reserved", "Reserved", "Reserved", "Reserved", "Reserved"
-};
-
-char buffer[32];
-
 static void showException(InterruptFrame* frame, uint64_t intNum, uint64_t errorCode)
 {
 	Renderer::setSerialPrint(true);
-	Renderer::printf("\x1b[31m\nException Raised: %s (%lu)\n", intNum < 32 ? exceptionMessages[intNum] : "Unknown",
-	                 intNum);
+	Renderer::printf("\x1b[31m\nException Raised: %lu\n", intNum);
 
-	if (intNum == 10 || intNum == 11 || intNum == 12 || intNum == 13)
+	switch (intNum)
 	{
-		const char* table;
-		switch (errorCode & 0b11)
+		case 0:
 		{
-			case 0:
-				table = "GDT";
-				break;
-			case 1:
-				table = "IDT";
-				break;
-			case 2:
-				table = "LDT";
-				break;
-			default:
-				table = "Unknown";
-				break;
+			Renderer::printf("Error: Division by zero.\n");
+			break;
 		}
+		case 1:
+		{
+			Renderer::printf("Error: Debug exception.\n");
+			break;
+		}
+		case 2:
+		{
+			Renderer::printf("Error: Non-maskable interrupt.\n");
+			break;
+		}
+		case 3:
+		{
+			Renderer::printf("Error: Breakpoint exception.\n");
+			break;
+		}
+		case 4:
+		{
+			Renderer::printf("Error: Overflow exception.\n");
+			break;
+		}
+		case 5:
+		{
+			Renderer::printf("Error: Bound range exceeded.\n");
+			break;
+		}
+		case 6:
+		{
+			Renderer::printf("Error: Invalid opcode.\n");
+			break;
+		}
+		case 7:
+		{
+			Renderer::printf("Error: Device not available.\n");
+			break;
+		}
+		case 8:
+		{
+			Renderer::printf("Error: Double fault.\n");
+			if (errorCode) Renderer::printf("Error Code: 0x%lx (%lu)\n", errorCode, errorCode);
 
-		Renderer::printf("TSS Selector: Index = %lu, Table = %s\n", errorCode >> 3, table);
-	}
-	if (intNum == 14)
-	{
-		uint64_t faultAddr;
-		asm volatile("mov %%cr2, %0" : "=r"(faultAddr));
-		Renderer::printf("Address: 0x%lx\nError Code: 0x%lx (%lu)\nPage Fault Details:\n", faultAddr, errorCode,
-		                 errorCode);
+			break;
+		}
+		case 9:
+		{
+			Renderer::printf("Error: Coprocessor segment overrun.\n");
+			if (errorCode) Renderer::printf("Error Code: 0x%lx (%lu)\n", errorCode, errorCode);
 
-		if (!(errorCode & 1)) Renderer::printf("- Page not present\n");
-		if (errorCode & 2) Renderer::printf("- Write operation\n");
-		if (errorCode & 4) Renderer::printf("- User mode access\n");
-		if (errorCode & 8) Renderer::printf("- Reserved bit violation\n");
-		if (errorCode & 16) Renderer::printf("- Instruction fetch\n");
-		if (errorCode & (1 << 5)) Renderer::printf("- Protection-key violation\n");
-		if (errorCode & (1 << 6)) Renderer::printf("- Shadow stack access violation\n");
-		if (errorCode & (1 << 15)) Renderer::printf("- SGX access violation\n");
+			break;
+		}
+		case 10:
+		case 11:
+		case 12:
+		case 13:
+		{
+			const char* table;
+			switch (errorCode & 0b11)
+			{
+				case 0:
+					table = "GDT";
+					break;
+				case 1:
+					table = "IDT";
+					break;
+				case 2:
+					table = "LDT";
+					break;
+				default:
+					table = "Unknown";
+					break;
+			}
+
+			Renderer::printf("TSS Selector: Index = %lu, Table = %s\n", errorCode >> 3, table);
+			break;
+		}
+		case 14:
+		{
+			uint64_t faultAddr;
+			asm volatile("mov %%cr2, %0" : "=r"(faultAddr));
+			Renderer::printf("Address: 0x%lx\nError Code: 0x%lx (%lu)\nPage Fault Details:\n", faultAddr, errorCode,
+			                 errorCode);
+
+			if (!(errorCode & 1)) Renderer::printf("- Page not present\n");
+			if (errorCode & 2) Renderer::printf("- Write operation\n");
+			if (errorCode & 4) Renderer::printf("- User mode access\n");
+			if (errorCode & 8) Renderer::printf("- Reserved bit violation\n");
+			if (errorCode & 16) Renderer::printf("- Instruction fetch\n");
+			if (errorCode & (1 << 5)) Renderer::printf("- Protection-key violation\n");
+			if (errorCode & (1 << 6)) Renderer::printf("- Shadow stack access violation\n");
+			if (errorCode & (1 << 15)) Renderer::printf("- SGX access violation\n");
+
+			break;
+		}
+		case 15:
+		{
+			Renderer::printf("Error: General protection fault.\n");
+			if (errorCode) Renderer::printf("Error Code: 0x%lx (%lu)\n", errorCode, errorCode);
+
+			break;
+		}
+		case 16:
+		{
+			Renderer::printf("Error: Reserved exception.\n");
+			if (errorCode) Renderer::printf("Error Code: 0x%lx (%lu)\n", errorCode, errorCode);
+
+			break;
+		}
+		case 17:
+		{
+			Renderer::printf("Error: Floating-point error.\n");
+			if (errorCode) Renderer::printf("Error Code: 0x%lx (%lu)\n", errorCode, errorCode);
+
+			break;
+		}
+		case 18:
+		{
+			Renderer::printf("Error: Alignment check.\n");
+			if (errorCode) Renderer::printf("Error Code: 0x%lx (%lu)\n", errorCode, errorCode);
+
+			break;
+		}
+		case 19:
+		{
+			Renderer::printf("Error: Machine check.\n");
+			if (errorCode) Renderer::printf("Error Code: 0x%lx (%lu)\n", errorCode, errorCode);
+
+			break;
+		}
+		case 20:
+		{
+			Renderer::printf("Error: SIMD floating-point exception.\n");
+			if (errorCode) Renderer::printf("Error Code: 0x%lx (%lu)\n", errorCode, errorCode);
+
+			break;
+		}
+		case 21:
+		{
+			Renderer::printf("Error: Virtualization exception.\n");
+			if (errorCode) Renderer::printf("Error Code: 0x%lx (%lu)\n", errorCode, errorCode);
+
+			break;
+		}
+		case 22:
+		{
+			Renderer::printf("Error: Control protection exception.\n");
+			if (errorCode) Renderer::printf("Error Code: 0x%lx (%lu)\n", errorCode, errorCode);
+
+			break;
+		}
+		case 23:
+		case 24:
+		case 25:
+		case 26:
+		case 27:
+		case 28:
+		case 29:
+		case 30:
+		case 31:
+		{
+			Renderer::printf("Error: Reserved exception.\n");
+			if (errorCode) Renderer::printf("Error Code: 0x%lx (%lu)\n", errorCode, errorCode);
+
+			break;
+		}
+		default:
+		{
+			Renderer::printf("Error: Unknown exception.\n");
+			if (errorCode) Renderer::printf("Error Code: 0x%lx (%lu)\n", errorCode, errorCode);
+
+			break;
+		}
 	}
 
 	Renderer::printf("RIP: 0x%lx\nCS: 0x%lx\nRSP: 0x%lx\nSS: 0x%lx\nRFLAGS: 0x%lx\n", frame->rip, frame->cs, frame->rsp,

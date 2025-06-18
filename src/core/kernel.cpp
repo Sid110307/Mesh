@@ -70,7 +70,7 @@ void initPaging()
 
 		uint64_t alignedBase = (entry->base + 0xFFF) & ~0xFFFULL;
 		if (uint64_t alignedSize = entry->length - (alignedBase - entry->base); alignedSize >=
-			FrameAllocator::FRAME_SIZE && alignedSize > size)
+			FrameAllocator::SMALL_SIZE && alignedSize > size)
 		{
 			base = alignedBase;
 			size = alignedSize;

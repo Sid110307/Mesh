@@ -25,8 +25,19 @@ class Paging
 {
 public:
 	static void init();
-	static void map(uint64_t virtualAddress, uint64_t physicalAddress, uint64_t flags);
-	static void unmap(uint64_t virtualAddress);
+
+	static bool mapSmall(uint64_t virtualAddress, uint64_t physicalAddress, uint64_t flags);
+	static bool mapMedium(uint64_t virtualAddress, uint64_t physicalAddress, uint64_t flags);
+	static bool mapLarge(uint64_t virtualAddress, uint64_t physicalAddress, uint64_t flags);
+
+	static void unmapSmall(uint64_t virtualAddress);
+	static void unmapMedium(uint64_t virtualAddress);
+	static void unmapLarge(uint64_t virtualAddress);
+
+private:
+	static void cleanup(uint64_t* startTable, uint16_t startIndex, int startLevel, uint64_t pdptIndex, uint64_t pdIndex,
+	                    const uint64_t* pd, const uint64_t* pdpt);
+	static bool cleanupPageTable(uint64_t* rootTable, uint16_t rootIndex, int rootLevel);
 };
 
 class FrameAllocator
@@ -40,5 +51,6 @@ public:
 
 	static uint64_t usedCount();
 	static uint64_t totalCount();
-	static constexpr uint64_t FRAME_SIZE = 4096;
+	static constexpr uint64_t SMALL_SIZE = 4096, MEDIUM_SIZE = 2ULL * 1024 * 1024,
+	                          LARGE_SIZE = 1ULL * 1024 * 1024 * 1024;
 };

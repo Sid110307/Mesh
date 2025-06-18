@@ -1,5 +1,7 @@
 #include "./gdt.h"
 
+#include <memory/paging.h>
+
 #include "../../core/utils.h"
 #include "../../boot/limine.h"
 
@@ -11,7 +13,7 @@ GDTEntry gdt[GDT_ENTRIES] __attribute__((aligned(8))) = {};
 GDTPointer gdtPointer = {};
 }
 
-static uint8_t ist1Stack[4096] __attribute__((aligned(16)));
+static uint8_t ist1Stack[FrameAllocator::SMALL_SIZE] __attribute__((aligned(16)));
 static uint64_t ist1StackTop = reinterpret_cast<uint64_t>(ist1Stack + sizeof(ist1Stack));
 
 GDTManager::GDTManager()
