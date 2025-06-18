@@ -26,6 +26,9 @@ enum Color
 	DEFAULT       = 0xE0E0E0,
 };
 
+uint8_t inb(uint16_t port);
+void outb(uint16_t port, uint8_t val);
+
 int atoi(const char* str);
 char* utoa(uint64_t value, char* buffer, size_t bufferSize, uint8_t base = 10, bool uppercase = true);
 char* strchr(const char* str, int c);

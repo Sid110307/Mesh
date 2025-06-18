@@ -1,7 +1,7 @@
 #include "./renderer.h"
 
 #include "../../arch/common/spinlock.h"
-#include "../io/io.h"
+#include "../io/serial/serial.h"
 #include "../../boot/limine.h"
 
 extern limine_framebuffer_request framebuffer_request;

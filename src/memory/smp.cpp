@@ -1,7 +1,7 @@
 #include "./smp.h"
 
 #include "../drivers/video/renderer.h"
-#include "../drivers/io/io.h"
+#include "../drivers/io/serial/serial.h"
 #include "../arch/x86_64/gdt.h"
 #include "../arch/x86_64/idt.h"
 #include "../boot/limine.h"
