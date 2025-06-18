@@ -20,14 +20,14 @@ jobs:
           brew update
           brew install nasm cmake qemu xorriso binutils
           git clone --branch v9.x-binary https://github.com/limine-bootloader/limine.git --depth=1
-          sudo make -C limine && cd limine && make install
+          sudo make -C limine && cd limine && sudo make install
       - name: Install dependencies
         if: matrix.os == 'ubuntu-latest'
         run: |
           sudo apt-get update
-          sudo apt-get install -y nasm cmake qemu xorriso binutils
+          sudo apt-get install -y nasm cmake qemu-system-x86 xorriso binutils
           git clone --branch v9.x-binary https://github.com/limine-bootloader/limine.git --depth=1
-          sudo make -C limine && cd limine && make install
+          sudo make -C limine && cd limine && sudo make install
       - name: Configure CMake
         continue-on-error: ${{ matrix.os == 'macos-latest' }}
         run: cmake -S ${{ github.workspace }} -B bin -G "${{ matrix.generator }}"
