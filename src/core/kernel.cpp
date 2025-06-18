@@ -42,7 +42,7 @@ void dumpStats()
 void initGDT()
 {
 	Renderer::printf("\x1b[36mInitializing GDT... ");
-	static uint8_t kernelStack[8192] __attribute__((aligned(16)));
+	static uint8_t kernelStack[SMP::SMP_STACK_SIZE] __attribute__((aligned(16)));
 
 	GDTManager gdtManager;
 	GDTManager::load();
@@ -88,6 +88,34 @@ void initPaging()
 	Renderer::printf("\x1b[32mDone!\n");
 }
 
+void initAPIC()
+{
+	constexpr uint32_t IA32_APIC_BASE_MSR = 0x1B;
+	constexpr uintptr_t LAPIC_SVR_OFFSET = 0xF0;
+
+	uint32_t apicLow, apicHigh;
+	asm volatile("rdmsr" : "=a"(apicLow), "=d"(apicHigh) : "c"(IA32_APIC_BASE_MSR));
+
+	uint64_t base = (static_cast<uint64_t>(apicHigh) << 32) | apicLow;
+	base |= (1ULL << 11);
+	base = (base & ~(0xFFFFFULL << 12)) | (SMP::LAPIC_BASE & 0xFFFFF000ULL);
+	asm volatile("wrmsr" :: "c"(IA32_APIC_BASE_MSR), "a"(static_cast<uint32_t>(base & 0xFFFFFFFF)), "d"(static_cast<
+		uint32_t>(base >> 32)));
+
+	volatile uint32_t* svr = reinterpret_cast<uint32_t*>(SMP::LAPIC_BASE + LAPIC_SVR_OFFSET);
+	uint32_t val = *svr;
+	val |= 1 << 8;
+	val = (val & 0xFFFFFF00) | 0xFF;
+	*svr = val;
+}
+
+void initSMP()
+{
+	Renderer::printf("\x1b[36mInitializing SMP... ");
+	SMP::init();
+	Renderer::printf("\x1b[32mDone!\n");
+}
+
 extern "C" [[noreturn]] void kernelMain()
 {
 	initRenderer();
@@ -95,7 +123,8 @@ extern "C" [[noreturn]] void kernelMain()
 	initGDT();
 	initIDT();
 	initPaging();
-	SMP::init();
+	initAPIC();
+	initSMP();
 
 	while (true) asm volatile ("hlt");
 }

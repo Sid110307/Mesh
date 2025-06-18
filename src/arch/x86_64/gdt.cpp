@@ -44,10 +44,10 @@ void GDTManager::load()
 		: "rax"
 	);
 	asm volatile (
-		"mov %[cs], %%ax\n\t"
-		"pushq %%rax\n\t"
-		"lea 1f(%%rip), %%rax\n\t"
-		"pushq %%rax\n\t"
+		"mov %[cs], %%ax\n"
+		"pushq %%rax\n"
+		"lea 1f(%%rip), %%rax\n"
+		"pushq %%rax\n"
 		"retfq\n"
 		"1:\n"
 		:: [cs] "r"(codeSel)

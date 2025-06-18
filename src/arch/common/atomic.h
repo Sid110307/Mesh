@@ -1,0 +1,16 @@
+#pragma once
+#include <stdint.h>
+
+class Atomic
+{
+public:
+	explicit constexpr Atomic(uint32_t init = 0);
+
+	uint32_t load() const noexcept;
+	void store(uint32_t val) noexcept;
+	uint32_t increment() noexcept;
+	bool compareExchange(uint32_t& expected, uint32_t desired) noexcept;
+
+private:
+	volatile uint32_t value;
+};
