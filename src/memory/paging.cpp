@@ -7,8 +7,8 @@ extern limine_memmap_request memory_request;
 extern limine_hhdm_request hhdm_request;
 extern limine_kernel_address_request kernel_addr_request;
 
-static Spinlock frameAllocatorLock;
 extern uint8_t _kernel_start[], _kernel_end[];
+static Spinlock pagingLock, frameAllocatorLock;
 
 static uint64_t memoryBase = 0;
 static uint64_t memorySize = 0;
@@ -19,6 +19,8 @@ static uint64_t* pml4 = nullptr;
 
 static uint64_t* createPageTable()
 {
+	LockGuard guard(pagingLock);
+
 	void* frame = FrameAllocator::alloc();
 	if (!frame) return nullptr;
 
@@ -31,6 +33,8 @@ static uint64_t* createPageTable()
 static uint64_t* ensureTable(uint64_t* parent, const uint16_t index,
                              const uint64_t flags = PageFlags::PRESENT | PageFlags::RW)
 {
+	LockGuard guard(pagingLock);
+
 	if (!(parent[index] & static_cast<uint64_t>(PageFlags::PRESENT)))
 	{
 		uint64_t* newTable = createPageTable();
@@ -104,6 +108,8 @@ void Paging::init()
 
 bool Paging::mapSmall(uint64_t virtualAddress, uint64_t physicalAddress, uint64_t flags)
 {
+	LockGuard guard(pagingLock);
+
 	auto pml4Index = (virtualAddress >> 39) & 0x1FF;
 	auto pdptIndex = (virtualAddress >> 30) & 0x1FF;
 	auto pdIndex = (virtualAddress >> 21) & 0x1FF;
@@ -124,6 +130,8 @@ bool Paging::mapSmall(uint64_t virtualAddress, uint64_t physicalAddress, uint64_
 
 bool Paging::mapMedium(uint64_t virtualAddress, uint64_t physicalAddress, uint64_t flags)
 {
+	LockGuard guard(pagingLock);
+
 	auto pml4Index = (virtualAddress >> 39) & 0x1FF;
 	auto pdptIndex = (virtualAddress >> 30) & 0x1FF;
 	auto pdIndex = (virtualAddress >> 21) & 0x1FF;
@@ -141,6 +149,8 @@ bool Paging::mapMedium(uint64_t virtualAddress, uint64_t physicalAddress, uint64
 
 bool Paging::mapLarge(uint64_t virtualAddress, uint64_t physicalAddress, uint64_t flags)
 {
+	LockGuard guard(pagingLock);
+
 	auto pml4Index = (virtualAddress >> 39) & 0x1FF;
 	auto pdptIndex = (virtualAddress >> 30) & 0x1FF;
 
@@ -155,6 +165,8 @@ bool Paging::mapLarge(uint64_t virtualAddress, uint64_t physicalAddress, uint64_
 
 void Paging::unmapSmall(uint64_t virtualAddress)
 {
+	LockGuard guard(pagingLock);
+
 	auto pml4Index = (virtualAddress >> 39) & 0x1FF;
 	auto pdptIndex = (virtualAddress >> 30) & 0x1FF;
 	auto pdIndex = (virtualAddress >> 21) & 0x1FF;
@@ -175,6 +187,8 @@ void Paging::unmapSmall(uint64_t virtualAddress)
 
 void Paging::unmapMedium(uint64_t virtualAddress)
 {
+	LockGuard guard(pagingLock);
+
 	auto pml4Index = (virtualAddress >> 39) & 0x1FF;
 	auto pdptIndex = (virtualAddress >> 30) & 0x1FF;
 	auto pdIndex = (virtualAddress >> 21) & 0x1FF;
@@ -192,6 +206,8 @@ void Paging::unmapMedium(uint64_t virtualAddress)
 
 void Paging::unmapLarge(uint64_t virtualAddress)
 {
+	LockGuard guard(pagingLock);
+
 	auto pml4Index = (virtualAddress >> 39) & 0x1FF;
 	auto pdptIndex = (virtualAddress >> 30) & 0x1FF;
 
@@ -311,6 +327,8 @@ bool Paging::cleanupPageTable(uint64_t* rootTable, uint16_t rootIndex, int rootL
 
 void FrameAllocator::init(const uint64_t base, const uint64_t size)
 {
+	LockGuard guard(frameAllocatorLock);
+
 	memoryBase = base;
 	memorySize = size;
 	totalFrames = size / SMALL_SIZE;
