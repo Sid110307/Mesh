@@ -4,7 +4,7 @@
 class Atomic
 {
 public:
-	explicit constexpr Atomic(uint32_t init = 0);
+	explicit Atomic(uint32_t init = 0);
 
 	uint32_t load() const noexcept;
 	void store(uint32_t val) noexcept;
