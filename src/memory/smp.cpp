@@ -17,7 +17,7 @@ uint32_t SMP::cpuCount = 0;
 
 extern "C" [[noreturn]] void apMain(void* arg)
 {
-	asm volatile("mov %0, %%rsp" :: "r"(arg));
+	asm volatile ("mov %0, %%rsp" :: "r"(arg));
 
 	GDTManager gdt;
 	GDTManager::load();
@@ -28,7 +28,7 @@ extern "C" [[noreturn]] void apMain(void* arg)
 	Serial::printf("[AP] Core with LAPIC ID %u is online\n", id);
 	SMP::apReadyCount.increment();
 
-	while (true) asm volatile("hlt");
+	while (true) asm volatile ("hlt");
 }
 
 void SMP::init()
@@ -80,12 +80,12 @@ void SMP::waitForAPs()
 	int timeout = 1000000;
 
 	Renderer::printf("\x1b[36m[SMP] Waiting for APs to come online... ");
-	while (apReadyCount.load() < cpuCount - 1 && timeout--) asm volatile("pause");
+	while (apReadyCount.load() < cpuCount - 1 && timeout--) asm volatile ("pause");
 
 	if (timeout == 0)
 	{
 		Renderer::printf("\x1b[31m Timeout waiting for APs!\x1b[0m\n");
-		while (true) asm volatile("hlt");
+		while (true) asm volatile ("hlt");
 	}
 	else Renderer::printf("\x1b[32m Ready.\x1b[0m\n");
 }

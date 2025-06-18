@@ -6,13 +6,13 @@ Spinlock::Spinlock() : locked(0)
 
 void Spinlock::lock()
 {
-	while (__atomic_test_and_set(&locked, __ATOMIC_ACQUIRE)) asm volatile("pause");
-	asm volatile("cli" ::: "memory");
+	while (__atomic_test_and_set(&locked, __ATOMIC_ACQUIRE)) asm volatile ("pause");
+	asm volatile ("cli" ::: "memory");
 }
 
 void Spinlock::unlock()
 {
-	asm volatile("sti" ::: "memory");
+	asm volatile ("sti" ::: "memory");
 	__atomic_clear(&locked, __ATOMIC_RELEASE);
 }
 
@@ -20,7 +20,7 @@ bool Spinlock::tryLock()
 {
 	if (!__atomic_test_and_set(&locked, __ATOMIC_ACQUIRE))
 	{
-		asm volatile("cli" ::: "memory");
+		asm volatile ("cli" ::: "memory");
 		return true;
 	}
 

@@ -80,7 +80,7 @@ void initPaging()
 	if (!base)
 	{
 		Renderer::printf("\x1b[31mFailed to find usable memory!\n");
-		while (true) asm volatile("hlt");
+		while (true) asm volatile ("hlt");
 	}
 
 	FrameAllocator::init(base, size);
@@ -94,12 +94,12 @@ void initAPIC()
 	constexpr uintptr_t LAPIC_SVR_OFFSET = 0xF0;
 
 	uint32_t apicLow, apicHigh;
-	asm volatile("rdmsr" : "=a"(apicLow), "=d"(apicHigh) : "c"(IA32_APIC_BASE_MSR));
+	asm volatile ("rdmsr" : "=a"(apicLow), "=d"(apicHigh) : "c"(IA32_APIC_BASE_MSR));
 
 	uint64_t base = (static_cast<uint64_t>(apicHigh) << 32) | apicLow;
 	base |= (1ULL << 11);
 	base = (base & ~(0xFFFFFULL << 12)) | (SMP::LAPIC_BASE & 0xFFFFF000ULL);
-	asm volatile("wrmsr" :: "c"(IA32_APIC_BASE_MSR), "a"(static_cast<uint32_t>(base & 0xFFFFFFFF)), "d"(static_cast<
+	asm volatile ("wrmsr" :: "c"(IA32_APIC_BASE_MSR), "a"(static_cast<uint32_t>(base & 0xFFFFFFFF)), "d"(static_cast<
 		uint32_t>(base >> 32)));
 
 	volatile uint32_t* svr = reinterpret_cast<uint32_t*>(SMP::LAPIC_BASE + LAPIC_SVR_OFFSET);

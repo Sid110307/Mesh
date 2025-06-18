@@ -92,7 +92,7 @@ static void showException(InterruptFrame* frame, uint64_t intNum, uint64_t error
 		case 14:
 		{
 			uint64_t faultAddr;
-			asm volatile("mov %%cr2, %0" : "=r"(faultAddr));
+			asm volatile ("mov %%cr2, %0" : "=r"(faultAddr));
 			Renderer::printf("Address: 0x%lx\nError Code: 0x%lx (%lu)\nPage Fault Details:\n", faultAddr, errorCode,
 			                 errorCode);
 
@@ -192,7 +192,7 @@ static void showException(InterruptFrame* frame, uint64_t intNum, uint64_t error
 	Renderer::setSerialPrint(false);
 	Renderer::printf("System Halted.\x1b[0m\n");
 
-	while (true) asm volatile("hlt");
+	while (true) asm volatile ("hlt");
 }
 
 #define ISR_NOERR(n) __attribute__((interrupt)) void isr##n(InterruptFrame* frame) { showException(frame, n, 0); }

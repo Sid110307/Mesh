@@ -81,14 +81,14 @@ void Paging::init()
 		if (!mapSmall(hhdm_request.response->offset + phys, phys, PageFlags::PRESENT | PageFlags::RW)) return;
 
 	uint64_t pml4Phys = reinterpret_cast<uint64_t>(pml4) - hhdm_request.response->offset;
-	asm volatile("mov %0, %%cr3" :: "r"(pml4Phys) : "memory");
+	asm volatile ("mov %0, %%cr3" :: "r"(pml4Phys) : "memory");
 	uint64_t cr4;
-	asm volatile("mov %%cr4, %0" : "=r"(cr4));
+	asm volatile ("mov %%cr4, %0" : "=r"(cr4));
 	cr4 |= 1 << 5;
-	asm volatile("mov %0, %%cr4" :: "r"(cr4));
+	asm volatile ("mov %0, %%cr4" :: "r"(cr4));
 
 	uint32_t eax, edx;
-	asm volatile(
+	asm volatile (
 		"mov $0xC0000080, %%ecx\n"
 		"rdmsr\n"
 		"or $(1 << 8), %%eax\n"
@@ -97,9 +97,9 @@ void Paging::init()
 		:: "ecx");
 
 	uint64_t cr0;
-	asm volatile("mov %%cr0, %0" : "=r"(cr0));
+	asm volatile ("mov %%cr0, %0" : "=r"(cr0));
 	cr0 |= 1 << 31;
-	asm volatile("mov %0, %%cr0" :: "r"(cr0));
+	asm volatile ("mov %0, %%cr0" :: "r"(cr0));
 }
 
 bool Paging::mapSmall(uint64_t virtualAddress, uint64_t physicalAddress, uint64_t flags)
@@ -117,7 +117,7 @@ bool Paging::mapSmall(uint64_t virtualAddress, uint64_t physicalAddress, uint64_
 	if (!pt) return false;
 
 	pt[ptIndex] = (physicalAddress & ~0xFFFULL) | flags;
-	asm volatile("invlpg (%0)" :: "r"(virtualAddress) : "memory");
+	asm volatile ("invlpg (%0)" :: "r"(virtualAddress) : "memory");
 
 	return true;
 }
@@ -134,7 +134,7 @@ bool Paging::mapMedium(uint64_t virtualAddress, uint64_t physicalAddress, uint64
 	if (!pd) return false;
 
 	pd[pdIndex] = (physicalAddress & ~0x1FFFFFULL) | flags | static_cast<uint64_t>(PageFlags::HUGE);
-	asm volatile("invlpg (%0)" :: "r"(virtualAddress) : "memory");
+	asm volatile ("invlpg (%0)" :: "r"(virtualAddress) : "memory");
 
 	return true;
 }
@@ -148,7 +148,7 @@ bool Paging::mapLarge(uint64_t virtualAddress, uint64_t physicalAddress, uint64_
 	if (!pdpt) return false;
 
 	pdpt[pdptIndex] = (physicalAddress & ~0x3FFFFFFFULL) | flags | static_cast<uint64_t>(PageFlags::HUGE);
-	asm volatile("invlpg (%0)" :: "r"(virtualAddress) : "memory");
+	asm volatile ("invlpg (%0)" :: "r"(virtualAddress) : "memory");
 
 	return true;
 }
@@ -169,7 +169,7 @@ void Paging::unmapSmall(uint64_t virtualAddress)
 	if (!(pt[ptIndex] & static_cast<uint64_t>(PageFlags::PRESENT))) return;
 
 	pt[ptIndex] = 0;
-	asm volatile("invlpg (%0)" :: "r"(virtualAddress) : "memory");
+	asm volatile ("invlpg (%0)" :: "r"(virtualAddress) : "memory");
 	cleanup(pt, ptIndex, 1, pdptIndex, pdIndex, pd, pdpt);
 }
 
@@ -186,7 +186,7 @@ void Paging::unmapMedium(uint64_t virtualAddress)
 	if (!(pd[pdIndex] & static_cast<uint64_t>(PageFlags::PRESENT))) return;
 
 	pd[pdIndex] = 0;
-	asm volatile("invlpg (%0)" :: "r"(virtualAddress) : "memory");
+	asm volatile ("invlpg (%0)" :: "r"(virtualAddress) : "memory");
 	cleanup(pd, pdIndex, 2, pdptIndex, pdIndex, pd, pdpt);
 }
 
@@ -200,7 +200,7 @@ void Paging::unmapLarge(uint64_t virtualAddress)
 	if (!(pdpt[pdptIndex] & static_cast<uint64_t>(PageFlags::PRESENT))) return;
 
 	pdpt[pdptIndex] = 0;
-	asm volatile("invlpg (%0)" :: "r"(virtualAddress) : "memory");
+	asm volatile ("invlpg (%0)" :: "r"(virtualAddress) : "memory");
 	cleanup(pdpt, pdptIndex, 3, pml4Index, pdptIndex, nullptr, nullptr);
 }
 
@@ -300,7 +300,7 @@ bool Paging::cleanupPageTable(uint64_t* rootTable, uint16_t rootIndex, int rootL
 			default:
 				return false;
 		}
-		if (virtBase != 0) asm volatile("invlpg (%0)" :: "r"(virtBase) : "memory");
+		if (virtBase != 0) asm volatile ("invlpg (%0)" :: "r"(virtBase) : "memory");
 
 		stackPtr--;
 		if (parent && level < 4) break;

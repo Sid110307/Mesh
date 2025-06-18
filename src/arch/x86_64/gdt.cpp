@@ -13,8 +13,7 @@ GDTEntry gdt[GDT_ENTRIES] __attribute__((aligned(8))) = {};
 GDTPointer gdtPointer = {};
 }
 
-static uint8_t ist1Stack[FrameAllocator::SMALL_SIZE] __attribute__((aligned(16)));
-static uint64_t ist1StackTop = reinterpret_cast<uint64_t>(ist1Stack + sizeof(ist1Stack));
+static uint8_t istStacks[7][8192] __attribute__((aligned(16)));
 
 GDTManager::GDTManager()
 {
@@ -60,7 +59,7 @@ void GDTManager::setTSS(uint64_t rsp0)
 	memset(&kernelTSS, 0, sizeof(kernelTSS));
 	kernelTSS.rsp[0] = rsp0;
 	kernelTSS.ioMapBase = sizeof(kernelTSS);
-	kernelTSS.ist[0] = ist1StackTop;
+	for (int i = 0; i < 7; ++i) kernelTSS.ist[i] = reinterpret_cast<uint64_t>(&istStacks[i][8192]);
 
 	auto base = reinterpret_cast<uint64_t>(&kernelTSS);
 	uint32_t limit = sizeof(TSS) - 1;
@@ -69,7 +68,7 @@ void GDTManager::setTSS(uint64_t rsp0)
 	gdt[GDT_TSS].baseLow = base & 0xFFFF;
 	gdt[GDT_TSS].baseMid = (base >> 16) & 0xFF;
 	gdt[GDT_TSS].access = 0x89;
-	gdt[GDT_TSS].flagsLimitHigh = ((limit >> 16) & 0x0F) | (0x00);
+	gdt[GDT_TSS].flagsLimitHigh = (limit >> 16) & 0x0F;
 	gdt[GDT_TSS].baseHigh = (base >> 24) & 0xFF;
 
 	*reinterpret_cast<uint32_t*>(&gdt[GDT_TSS + 1]) = (base >> 32) & 0xFFFFFFFF;
