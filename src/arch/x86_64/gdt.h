@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../core/utils.h"
+#include "../../core/utils.h"
 
 enum : uint16_t
 {
@@ -33,19 +33,12 @@ struct __attribute__((packed)) TSS
 class GDTManager
 {
 public:
-	static GDTManager& getInstance();
-	static void init();
+	GDTManager();
 	static void load();
-	static void setTSS(uint64_t rsp0);
+	void setTSS(uint64_t rsp0);
+
+	TSS kernelTSS __attribute__((aligned(16))) = {};
 
 private:
-	static GDTEntry gdt[GDT_ENTRIES] __attribute__((aligned(8)));
-	static GDTPointer gdtPointer;
-	static TSS kernelTSS __attribute__((aligned(16)));
-
-	GDTManager() = default;
-	GDTManager(const GDTManager&) = delete;
-	GDTManager& operator=(const GDTManager&) = delete;
-
 	static void setEntry(uint16_t index, uint32_t base, uint32_t limit, uint8_t access, uint8_t flags);
 };

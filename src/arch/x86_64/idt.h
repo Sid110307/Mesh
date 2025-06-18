@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../core/utils.h"
+#include "../../core/utils.h"
 
 struct __attribute__((packed)) IDTEntry
 {
@@ -22,6 +22,5 @@ public:
 	static void init();
 	static void setEntry(uint8_t vector, void (*isr)(), uint8_t flags = 0x8E, uint8_t ist = 0);
 
-private:
 	static IDTEntry idt[256];
 };

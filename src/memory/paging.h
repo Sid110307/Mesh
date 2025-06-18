@@ -40,5 +40,5 @@ public:
 
 	static uint64_t usedCount();
 	static uint64_t totalCount();
-	static uint64_t FRAME_SIZE;
+	static constexpr uint64_t FRAME_SIZE = 4096;
 };

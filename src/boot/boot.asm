@@ -1,5 +1,4 @@
 bits 64
-default rel
 
 section .text
     global _start

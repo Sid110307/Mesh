@@ -2,6 +2,8 @@
 #include "./isr.h"
 
 IDTEntry IDTManager::idt[256];
+static IDTPointer idtPointer = {sizeof(IDTManager::idt) - 1, reinterpret_cast<uint64_t>(IDTManager::idt)};
+
 extern "C" void* const isrList[32] = {
 	(void*)isr0, (void*)isr1, (void*)isr2, (void*)isr3, (void*)isr4, (void*)isr5, (void*)isr6, (void*)isr7, (void*)isr8,
 	(void*)isr9, (void*)isr10, (void*)isr11, (void*)isr12, (void*)isr13, (void*)isr14, (void*)isr15, (void*)isr16,
@@ -12,12 +14,7 @@ extern "C" void* const isrList[32] = {
 void IDTManager::init()
 {
 	for (int i = 0; i < 32; ++i) setEntry(i, reinterpret_cast<void (*)()>(isrList[i]));
-
-	IDTPointer idtPtr = {
-		.limit = sizeof(idt) - 1,
-		.base = reinterpret_cast<uint64_t>(idt),
-	};
-	asm volatile("lidt %0" :: "m"(idtPtr));
+	asm volatile("lidt %0" :: "m"(idtPointer));
 	asm volatile("sti");
 }
 

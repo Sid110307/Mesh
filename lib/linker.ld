@@ -5,6 +5,7 @@ SECTIONS {
     _kernel_start = .;
     .text : ALIGN(4K) {
         KEEP(*(.text.boot))
+        KEEP(*(.text.smp))
         *(.text .text.*)
     }
     .rodata : ALIGN(4K) { *(.rodata .rodata.*) }

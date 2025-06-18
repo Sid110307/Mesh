@@ -1,21 +1,20 @@
 #include "./gdt.h"
 
-#include "../core/utils.h"
+#include "../../core/utils.h"
+#include "../../boot/limine.h"
 
-GDTEntry GDTManager::gdt[GDT_ENTRIES] __attribute__((aligned(8)));
-GDTPointer GDTManager::gdtPointer;
-TSS GDTManager::kernelTSS __attribute__((aligned(16)));
+extern limine_hhdm_request hhdm_request;
+
+extern "C"
+{
+GDTEntry gdt[GDT_ENTRIES] __attribute__((aligned(8))) = {};
+GDTPointer gdtPointer = {};
+}
 
 static uint8_t ist1Stack[4096] __attribute__((aligned(16)));
 static uint64_t ist1StackTop = reinterpret_cast<uint64_t>(ist1Stack + sizeof(ist1Stack));
 
-GDTManager& GDTManager::getInstance()
-{
-	static GDTManager instance;
-	return instance;
-}
-
-void GDTManager::init()
+GDTManager::GDTManager()
 {
 	setEntry(GDT_NULL, 0, 0, 0, 0);
 	setEntry(GDT_CODE, 0, 0, 0x9A, 0x20);

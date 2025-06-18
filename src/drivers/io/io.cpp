@@ -1,4 +1,7 @@
-#include "./io.h"
+#include "../io/io.h"
+#include "../../arch/common/spinlock.h"
+
+static Spinlock serialLock;
 
 uint8_t inb(uint16_t port)
 {
@@ -26,6 +29,8 @@ void Serial::init()
 
 void Serial::printf(const char* fmt, ...)
 {
+	LockGuard guard(serialLock);
+
 	if (!initialized) init();
 	if (!fmt || !*fmt)
 	{
@@ -42,12 +47,16 @@ void Serial::printf(const char* fmt, ...)
 
 void Serial::write(const char* str)
 {
+	LockGuard guard(serialLock);
+
 	if (!initialized) init();
 	for (size_t i = 0; str[i] != '\0'; ++i) writeByte(static_cast<uint8_t>(str[i]));
 }
 
 void Serial::write(const char* str, const size_t len)
 {
+	LockGuard guard(serialLock);
+
 	if (!initialized) init();
 	for (size_t i = 0; i < len; ++i) writeByte(static_cast<uint8_t>(str[i]));
 }

@@ -1,7 +1,7 @@
 #include "./isr.h"
 
-#include "../memory/paging.h"
-#include "../drivers/renderer.h"
+#include "../../memory/paging.h"
+#include "../../drivers/video/renderer.h"
 
 const char* exceptionMessages[32] = {
 	"Divide by Zero", "Debug", "Non-maskable Interrupt", "Breakpoint", "Overflow", "Bound Range Exceeded",

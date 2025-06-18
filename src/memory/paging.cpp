@@ -1,8 +1,5 @@
 #include "./paging.h"
-
-#include <drivers/io.h>
-
-#include "../core/limine.h"
+#include "../boot/limine.h"
 
 extern limine_framebuffer_request framebuffer_request;
 extern limine_memmap_request memory_request;
@@ -10,7 +7,6 @@ extern limine_hhdm_request hhdm_request;
 extern limine_kernel_address_request kernel_addr_request;
 
 extern uint8_t _kernel_start[], _kernel_end[];
-uint64_t FrameAllocator::FRAME_SIZE = 4096;
 
 static uint64_t memoryBase = 0;
 static uint64_t memorySize = 0;
