@@ -1,0 +1,52 @@
+name: Build and Release
+on: [ push, pull_request ]
+jobs:
+  build:
+    name: Setup and Build ISO
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            generator: "Xcode"
+          - os: ubuntu-latest
+            generator: "Unix Makefiles"
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install dependencies
+        if: matrix.os == 'macos-latest'
+        run: |
+          brew update
+          brew install nasm cmake qemu xorriso binutils
+          git clone --branch v9.x-binary https://github.com/limine-bootloader/limine.git --depth=1
+          sudo make -C limine && cd limine && make install
+      - name: Install dependencies
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y nasm cmake qemu xorriso binutils
+          git clone --branch v9.x-binary https://github.com/limine-bootloader/limine.git --depth=1
+          sudo make -C limine && cd limine && make install
+      - name: Configure CMake
+        continue-on-error: ${{ matrix.os == 'macos-latest' }}
+        run: cmake -S ${{ github.workspace }} -B bin -G "${{ matrix.generator }}"
+      - name: Build
+        continue-on-error: ${{ matrix.os == 'macos-latest' }}
+        run: cmake --build bin --target iso --config Release
+  release:
+    name: Create Release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download ISO
+        uses: actions/download-artifact@v4
+        with:
+          name: Mesh.iso
+          path: ./release-assets
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ./release-assets/Mesh.iso
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
