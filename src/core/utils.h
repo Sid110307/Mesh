@@ -34,6 +34,9 @@ char* utoa(uint64_t value, char* buffer, size_t bufferSize, uint8_t base = 10, b
 char* strchr(const char* str, int c);
 char* strtok_r(char* str, const char* delim, char** savePtr);
 
+void swap(uint32_t& a, uint32_t& b) noexcept;
+uint64_t ffsll(uint64_t value) noexcept;
+
 void* memcpy(void* dest, const void* src, size_t n);
 void* memset(void* dest, int c, size_t n);
 void* memmove(void* dest, const void* src, size_t n);

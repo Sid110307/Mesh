@@ -17,18 +17,26 @@ enum class PageFlags : uint64_t
 	NO_EXECUTE    = 1ULL << 63
 };
 
-constexpr uint64_t operator|(PageFlags a, PageFlags b) { return static_cast<uint64_t>(a) | static_cast<uint64_t>(b); }
-constexpr uint64_t operator&(PageFlags a, PageFlags b) { return static_cast<uint64_t>(a) & static_cast<uint64_t>(b); }
-constexpr uint64_t operator~(PageFlags flag) { return ~static_cast<uint64_t>(flag); }
+constexpr PageFlags operator|(PageFlags a, PageFlags b)
+{
+	return static_cast<PageFlags>(static_cast<uint64_t>(a) | static_cast<uint64_t>(b));
+}
+
+constexpr PageFlags operator&(PageFlags a, PageFlags b)
+{
+	return static_cast<PageFlags>(static_cast<uint64_t>(a) & static_cast<uint64_t>(b));
+}
+
+constexpr PageFlags operator~(PageFlags flag) { return static_cast<PageFlags>(~static_cast<uint64_t>(flag)); }
 
 class Paging
 {
 public:
 	static void init();
 
-	static bool mapSmall(uint64_t virtualAddress, uint64_t physicalAddress, uint64_t flags);
-	static bool mapMedium(uint64_t virtualAddress, uint64_t physicalAddress, uint64_t flags);
-	static bool mapLarge(uint64_t virtualAddress, uint64_t physicalAddress, uint64_t flags);
+	static bool mapSmall(uint64_t virtualAddress, uint64_t physicalAddress, PageFlags flags);
+	static bool mapMedium(uint64_t virtualAddress, uint64_t physicalAddress, PageFlags flags);
+	static bool mapLarge(uint64_t virtualAddress, uint64_t physicalAddress, PageFlags flags);
 
 	static void unmapSmall(uint64_t virtualAddress);
 	static void unmapMedium(uint64_t virtualAddress);
@@ -43,7 +51,7 @@ private:
 class FrameAllocator
 {
 public:
-	static void init(uint64_t base, uint64_t size);
+	static void init();
 	static void* alloc();
 	static void free(void* frame);
 	static void reserve(void* frame);
@@ -52,5 +60,5 @@ public:
 	static uint64_t usedCount();
 	static uint64_t totalCount();
 	static constexpr uint64_t SMALL_SIZE = 4096, MEDIUM_SIZE = 2ULL * 1024 * 1024,
-	                          LARGE_SIZE = 1ULL * 1024 * 1024 * 1024;
+	                          LARGE_SIZE = 1ULL * 1024 * 1024 * 1024, BIOS_START = 0x100000;
 };

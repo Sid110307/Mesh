@@ -86,15 +86,16 @@ static void showException(InterruptFrame* frame, uint64_t intNum, uint64_t error
 					break;
 			}
 
-			Renderer::printf("TSS Selector: Index = %lu, Table = %s\n", errorCode >> 3, table);
+			Renderer::printf("Error: Segment not present.\nTSS Selector: Index = %lu, Table = %s\n", errorCode >> 3,
+			                 table);
 			break;
 		}
 		case 14:
 		{
 			uint64_t faultAddr;
 			asm volatile ("mov %%cr2, %0" : "=r"(faultAddr));
-			Renderer::printf("Address: 0x%lx\nError Code: 0x%lx (%lu)\nPage Fault Details:\n", faultAddr, errorCode,
-			                 errorCode);
+			Renderer::printf("Error: Page fault.\nAddress: 0x%lx\nError Code: 0x%lx (%lu)\nPage Fault Details:\n",
+			                 faultAddr, errorCode, errorCode);
 
 			if (!(errorCode & 1)) Renderer::printf("- Page not present\n");
 			if (errorCode & 2) Renderer::printf("- Write operation\n");
@@ -190,7 +191,7 @@ static void showException(InterruptFrame* frame, uint64_t intNum, uint64_t error
 	Renderer::printf("RIP: 0x%lx\nCS: 0x%lx\nRSP: 0x%lx\nSS: 0x%lx\nRFLAGS: 0x%lx\n", frame->rip, frame->cs, frame->rsp,
 	                 frame->ss, frame->rflags);
 	Renderer::setSerialPrint(false);
-	Renderer::printf("System Halted.\x1b[0m\n");
+	Renderer::printf("\x1b[0mSystem Halted.\n");
 
 	while (true) asm volatile ("hlt");
 }

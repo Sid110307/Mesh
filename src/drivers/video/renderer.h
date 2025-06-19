@@ -44,6 +44,7 @@ public:
 private:
 	static void ansiPutChar(char c);
 	inline static void drawGlyph(uint32_t px, uint32_t py, char c, uint32_t fg, uint32_t bg);
+	static inline bool fbReady();
 
 	static void printCharUnlocked(char c, uint32_t fg = ansiFg, uint32_t bg = ansiBg);
 	static void printUnlocked(const char* str, uint32_t fg = ansiFg, uint32_t bg = ansiBg);

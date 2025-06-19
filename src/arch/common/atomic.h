@@ -1,7 +1,8 @@
 #pragma once
-#include <stdint.h>
 
-class Atomic
+#include "../../core/utils.h"
+
+class alignas(4) Atomic
 {
 public:
 	explicit Atomic(uint32_t init = 0);

@@ -31,7 +31,7 @@ set(OUT_DIR ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
 set(ISO_ROOT ${CMAKE_BINARY_DIR}/iso)
 set(LIMINE_ROOT /usr/local/share/limine)
 
-set(CMAKE_C_FLAGS "-ffreestanding -O2 -Wall -Wextra -m64 -mno-red-zone")
+set(CMAKE_C_FLAGS "-ffreestanding -g -O2 -Wall -Wextra -m64 -mno-red-zone")
 set(CMAKE_CXX_FLAGS "${CMAKE_C_FLAGS} -fno-exceptions -fno-rtti")
 set(CMAKE_ASM_NASM_FLAGS "-f elf64")
 set(CMAKE_EXE_LINKER_FLAGS "-nostdlib -z noexecstack -static -T ${CMAKE_SOURCE_DIR}/lib/linker.ld")
@@ -87,7 +87,7 @@ add_custom_command(
 )
 add_custom_target(iso ALL DEPENDS ${OUT_DIR}/Mesh.iso)
 add_custom_target(run
-        COMMAND ${QEMU_EXECUTABLE} -no-reboot -m 512M -smp 4 -cdrom ${OUT_DIR}/Mesh.iso -serial mon:stdio
+        COMMAND ${QEMU_EXECUTABLE} -s -no-reboot -m 512M -smp 4 -cdrom ${OUT_DIR}/Mesh.iso -serial mon:stdio
         DEPENDS iso
         WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
         COMMENT "🚀 Running Mesh in QEMU..."

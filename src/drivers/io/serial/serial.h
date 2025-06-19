@@ -10,12 +10,14 @@ public:
 
 	static void write(const char* str);
 	static void write(const char* str, size_t len);
-	static void write(uint8_t byte);
+	static void writeByte(uint8_t byte);
 	static void writeHex(uint64_t value);
 	static void writeDec(uint64_t value);
 
 private:
-	static void writeByte(uint8_t byte);
-	static inline uint16_t port = 0x3F8;
-	static inline bool initialized = false;
+	static void writeHexUnlocked(uint64_t value);
+	static void writeDecUnlocked(uint64_t value);
+
+	inline static uint16_t port = 0x3F8;
+	inline static bool initialized = false;
 };

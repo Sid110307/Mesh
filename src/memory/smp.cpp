@@ -10,17 +10,18 @@
 extern limine_smp_request smp_request;
 static Spinlock smpLock;
 
-alignas(16) static uint8_t kernelStacks[SMP::MAX_CPUS][SMP::SMP_STACK_SIZE];
-alignas(16) static uint8_t apStacks[SMP::MAX_CPUS][SMP::SMP_STACK_SIZE];
+alignas(4096) static uint8_t kernelStacks[SMP::MAX_CPUS][SMP::SMP_STACK_SIZE];
+alignas(4096) static uint8_t apStacks[SMP::MAX_CPUS][SMP::SMP_STACK_SIZE];
 static uint32_t lapicIDs[SMP::MAX_CPUS] = {};
 
 Atomic SMP::apReadyCount{0};
 uint32_t SMP::cpuCount = 0;
+thread_local uint32_t cpuId = 0;
 
 extern "C" [[noreturn]] void apMain(void* arg)
 {
 	asm volatile ("mov %0, %%rsp" :: "r"(arg));
-	uint32_t cpuId = SMP::getLapicID();
+	cpuId = SMP::getLapicID();
 
 	GDTManager gdt;
 	GDTManager::load();
@@ -40,9 +41,7 @@ void SMP::init()
 
 	const auto* response = smp_request.response;
 	if (!response || response->cpu_count == 0) return;
-
 	cpuCount = response->cpu_count;
-	Renderer::printf("\x1b[36m[SMP] \x1b[96m%u cores total\x1b[0m\n", cpuCount);
 
 	for (uint32_t i = 0; i < cpuCount; ++i)
 	{
@@ -73,6 +72,12 @@ void SMP::init()
 
 uint32_t SMP::getCpuCount() { return cpuCount; }
 
+uint32_t SMP::getCpuId()
+{
+	if (cpuId != 0) return cpuId;
+	return cpuId = getLapicID();
+}
+
 uint32_t SMP::getLapicID()
 {
 	const uint32_t idReg = *reinterpret_cast<volatile uint32_t*>(LAPIC_BASE + LAPIC_ID_REGISTER_OFFSET);
@@ -88,8 +93,8 @@ void SMP::waitForAPs()
 
 	if (timeout == 0)
 	{
-		Renderer::printf("\x1b[31m Timeout waiting for APs!\x1b[0m\n");
-		while (true) asm volatile ("hlt");
+		Renderer::printf("\x1b[31m Timeout waiting for APs! Using %u cores.\x1b[0m\n", apReadyCount.load() + 1);
+		cpuCount = apReadyCount.load() + 1;
 	}
 	else Renderer::printf("\x1b[32m Ready.\x1b[0m\n");
 }

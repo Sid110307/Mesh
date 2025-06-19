@@ -1,8 +1,8 @@
 #include "./idt.h"
 #include "./isr.h"
 
-IDTEntry IDTManager::idt[256];
-static IDTPointer idtPointer = {sizeof(IDTManager::idt) - 1, reinterpret_cast<uint64_t>(IDTManager::idt)};
+static IDTEntry idt[256];
+static IDTPointer idtPointer = {sizeof(idt) - 1, reinterpret_cast<uint64_t>(idt)};
 
 extern "C" void* const isrList[32] = {
 	(void*)isr0, (void*)isr1, (void*)isr2, (void*)isr3, (void*)isr4, (void*)isr5, (void*)isr6, (void*)isr7, (void*)isr8,

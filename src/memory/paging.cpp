@@ -1,4 +1,6 @@
 #include "./paging.h"
+#include "./smp.h"
+#include "../drivers/io/serial/serial.h"
 #include "../arch/common/spinlock.h"
 #include "../boot/limine.h"
 
@@ -19,8 +21,6 @@ static uint64_t* pml4 = nullptr;
 
 static uint64_t* createPageTable()
 {
-	LockGuard guard(pagingLock);
-
 	void* frame = FrameAllocator::alloc();
 	if (!frame) return nullptr;
 
@@ -31,17 +31,15 @@ static uint64_t* createPageTable()
 }
 
 static uint64_t* ensureTable(uint64_t* parent, const uint16_t index,
-                             const uint64_t flags = PageFlags::PRESENT | PageFlags::RW)
+                             const PageFlags flags = PageFlags::PRESENT | PageFlags::RW)
 {
-	LockGuard guard(pagingLock);
-
 	if (!(parent[index] & static_cast<uint64_t>(PageFlags::PRESENT)))
 	{
 		uint64_t* newTable = createPageTable();
 		if (!newTable) return nullptr;
 
 		const uint64_t phys = reinterpret_cast<uint64_t>(newTable) - hhdm_request.response->offset;
-		parent[index] = phys | flags;
+		parent[index] = phys | static_cast<uint64_t>(flags);
 	}
 	return reinterpret_cast<uint64_t*>(hhdm_request.response->offset + (parent[index] & ~0xFFFULL));
 }
@@ -49,7 +47,11 @@ static uint64_t* ensureTable(uint64_t* parent, const uint16_t index,
 void Paging::init()
 {
 	pml4 = createPageTable();
-	if (!pml4) return;
+	if (!pml4)
+	{
+		Serial::printf("Failed to create PML4 table.\n");
+		while (true) asm volatile("hlt");
+	}
 
 	uint64_t kernelPhysStart = kernel_addr_request.response->physical_base;
 	uint64_t kernelVirtStart = kernel_addr_request.response->virtual_base;
@@ -60,8 +62,16 @@ void Paging::init()
 		uint64_t phys = kernelPhysStart + offset;
 		uint64_t virt = kernelVirtStart + offset;
 
-		if (!mapSmall(phys, phys, PageFlags::PRESENT | PageFlags::RW)) return;
-		if (!mapSmall(virt, phys, PageFlags::PRESENT | PageFlags::RW)) return;
+		if (!mapSmall(phys, phys, PageFlags::PRESENT | PageFlags::RW))
+		{
+			Serial::printf("Failed to map kernel page at 0x%lx to 0x%lx.\n", phys, virt);
+			while (true) asm volatile("hlt");
+		}
+		if (!mapSmall(virt, phys, PageFlags::PRESENT | PageFlags::RW))
+		{
+			Serial::printf("Failed to map kernel page at 0x%lx to 0x%lx.\n", virt, phys);
+			while (true) asm volatile("hlt");
+		}
 	}
 
 	if (framebuffer_request.response && framebuffer_request.response->framebuffer_count > 0)
@@ -71,7 +81,11 @@ void Paging::init()
 		uint64_t fbSize = fb->pitch * fb->height;
 
 		for (uint64_t addr = fbBase; addr < fbBase + fbSize; addr += FrameAllocator::SMALL_SIZE)
-			if (!mapSmall(addr, addr, PageFlags::PRESENT | PageFlags::RW)) return;
+			if (!mapSmall(addr, addr, PageFlags::PRESENT | PageFlags::RW))
+			{
+				Serial::printf("Failed to map framebuffer page at 0x%lx.\n", addr);
+				while (true) asm volatile("hlt");
+			}
 	}
 
 	uint64_t maxPhys = 0;
@@ -82,31 +96,35 @@ void Paging::init()
 			if (uint64_t end = entry->base + entry->length; end > maxPhys) maxPhys = end;
 
 	for (uint64_t phys = 0; phys < maxPhys; phys += FrameAllocator::SMALL_SIZE)
-		if (!mapSmall(hhdm_request.response->offset + phys, phys, PageFlags::PRESENT | PageFlags::RW)) return;
+		if (!mapSmall(hhdm_request.response->offset + phys, phys, PageFlags::PRESENT | PageFlags::RW))
+		{
+			Serial::printf("Failed to map HHDM page at 0x%lx.\n", hhdm_request.response->offset + phys);
+			while (true) asm volatile("hlt");
+		}
+
+	if (!mapSmall(SMP::LAPIC_BASE, SMP::LAPIC_BASE, PageFlags::PRESENT | PageFlags::RW))
+	{
+		Serial::printf("Failed to map LAPIC page at 0x%lx.\n", SMP::LAPIC_BASE);
+		while (true) asm volatile("hlt");
+	}
 
 	uint64_t pml4Phys = reinterpret_cast<uint64_t>(pml4) - hhdm_request.response->offset;
+
+	asm volatile("cli");
 	asm volatile ("mov %0, %%cr3" :: "r"(pml4Phys) : "memory");
 	uint64_t cr4;
 	asm volatile ("mov %%cr4, %0" : "=r"(cr4));
 	cr4 |= 1 << 5;
 	asm volatile ("mov %0, %%cr4" :: "r"(cr4));
-
 	uint32_t eax, edx;
-	asm volatile (
-		"mov $0xC0000080, %%ecx\n"
-		"rdmsr\n"
-		"or $(1 << 8), %%eax\n"
-		"wrmsr\n"
-		: "=a"(eax), "=d"(edx)
-		:: "ecx");
-
+	asm volatile ("mov $0xC0000080, %%ecx\nrdmsr\nor $(1 << 8), %%eax\nwrmsr\n" : "=a"(eax), "=d"(edx) :: "ecx");
 	uint64_t cr0;
 	asm volatile ("mov %%cr0, %0" : "=r"(cr0));
-	cr0 |= 1 << 31;
+	cr0 |= 1 << 31 | 1 << 16;
 	asm volatile ("mov %0, %%cr0" :: "r"(cr0));
 }
 
-bool Paging::mapSmall(uint64_t virtualAddress, uint64_t physicalAddress, uint64_t flags)
+bool Paging::mapSmall(uint64_t virtualAddress, uint64_t physicalAddress, PageFlags flags)
 {
 	LockGuard guard(pagingLock);
 
@@ -122,13 +140,13 @@ bool Paging::mapSmall(uint64_t virtualAddress, uint64_t physicalAddress, uint64_
 	uint64_t* pt = ensureTable(pd, pdIndex);
 	if (!pt) return false;
 
-	pt[ptIndex] = (physicalAddress & ~0xFFFULL) | flags;
+	pt[ptIndex] = (physicalAddress & ~0xFFFULL) | static_cast<uint64_t>(flags);
 	asm volatile ("invlpg (%0)" :: "r"(virtualAddress) : "memory");
 
 	return true;
 }
 
-bool Paging::mapMedium(uint64_t virtualAddress, uint64_t physicalAddress, uint64_t flags)
+bool Paging::mapMedium(uint64_t virtualAddress, uint64_t physicalAddress, PageFlags flags)
 {
 	LockGuard guard(pagingLock);
 
@@ -141,13 +159,14 @@ bool Paging::mapMedium(uint64_t virtualAddress, uint64_t physicalAddress, uint64
 	uint64_t* pd = ensureTable(pdpt, pdptIndex);
 	if (!pd) return false;
 
-	pd[pdIndex] = (physicalAddress & ~0x1FFFFFULL) | flags | static_cast<uint64_t>(PageFlags::HUGE);
+	pd[pdIndex] = (physicalAddress & ~0x1FFFFFULL) | static_cast<uint64_t>(flags) | static_cast<uint64_t>(
+		PageFlags::HUGE);
 	asm volatile ("invlpg (%0)" :: "r"(virtualAddress) : "memory");
 
 	return true;
 }
 
-bool Paging::mapLarge(uint64_t virtualAddress, uint64_t physicalAddress, uint64_t flags)
+bool Paging::mapLarge(uint64_t virtualAddress, uint64_t physicalAddress, PageFlags flags)
 {
 	LockGuard guard(pagingLock);
 
@@ -157,7 +176,8 @@ bool Paging::mapLarge(uint64_t virtualAddress, uint64_t physicalAddress, uint64_
 	uint64_t* pdpt = ensureTable(pml4, pml4Index);
 	if (!pdpt) return false;
 
-	pdpt[pdptIndex] = (physicalAddress & ~0x3FFFFFFFULL) | flags | static_cast<uint64_t>(PageFlags::HUGE);
+	pdpt[pdptIndex] = (physicalAddress & ~0x3FFFFFFFULL) | static_cast<uint64_t>(flags) | static_cast<uint64_t>(
+		PageFlags::HUGE);
 	asm volatile ("invlpg (%0)" :: "r"(virtualAddress) : "memory");
 
 	return true;
@@ -199,6 +219,7 @@ void Paging::unmapMedium(uint64_t virtualAddress)
 	auto pd = reinterpret_cast<uint64_t*>(hhdm_request.response->offset + (pdpt[pdptIndex] & ~0xFFFULL));
 	if (!(pd[pdIndex] & static_cast<uint64_t>(PageFlags::PRESENT))) return;
 
+	pd[pdIndex] &= ~static_cast<uint64_t>(PageFlags::HUGE);
 	pd[pdIndex] = 0;
 	asm volatile ("invlpg (%0)" :: "r"(virtualAddress) : "memory");
 	cleanup(pd, pdIndex, 2, pdptIndex, pdIndex, pd, pdpt);
@@ -215,6 +236,7 @@ void Paging::unmapLarge(uint64_t virtualAddress)
 	auto pdpt = reinterpret_cast<uint64_t*>(hhdm_request.response->offset + (pml4[pml4Index] & ~0xFFFULL));
 	if (!(pdpt[pdptIndex] & static_cast<uint64_t>(PageFlags::PRESENT))) return;
 
+	pdpt[pdptIndex] &= ~static_cast<uint64_t>(PageFlags::HUGE);
 	pdpt[pdptIndex] = 0;
 	asm volatile ("invlpg (%0)" :: "r"(virtualAddress) : "memory");
 	cleanup(pdpt, pdptIndex, 3, pml4Index, pdptIndex, nullptr, nullptr);
@@ -325,19 +347,39 @@ bool Paging::cleanupPageTable(uint64_t* rootTable, uint16_t rootIndex, int rootL
 	return true;
 }
 
-void FrameAllocator::init(const uint64_t base, const uint64_t size)
+void FrameAllocator::init()
 {
 	LockGuard guard(frameAllocatorLock);
+	uint64_t bestBase = 0, bestSize = 0;
 
-	memoryBase = base;
-	memorySize = size;
-	totalFrames = size / SMALL_SIZE;
+	for (size_t i = 0; i < memory_request.response->entry_count; ++i)
+	{
+		const auto* entry = memory_request.response->entries[i];
+		if (entry->type != LIMINE_MEMMAP_USABLE || entry->base < BIOS_START) continue;
+		if (entry->length > bestSize)
+		{
+			bestBase = entry->base;
+			bestSize = entry->length;
+		}
+	}
+
+	if (bestBase == 0 || bestSize == 0)
+	{
+		Serial::printf("No memory region for frame allocator\n");
+		while (true) asm volatile("hlt");
+	}
+
+	uint64_t total = bestSize / SMALL_SIZE, bitmapBytes = ((total + 63) / 64) * sizeof(uint64_t),
+	         bitmapPages = (bitmapBytes + SMALL_SIZE - 1) / SMALL_SIZE, bitmapPhys = bestBase;
+	bitmap = reinterpret_cast<uint64_t*>(hhdm_request.response->offset + bitmapPhys);
+	memset(bitmap, 0, bitmapPages * SMALL_SIZE);
+
+	memoryBase = bestBase + bitmapPages * SMALL_SIZE;
+	memorySize = bestSize - bitmapPages * SMALL_SIZE;
+	totalFrames = memorySize / SMALL_SIZE;
 	usedFrames = 0;
-	bitmap = reinterpret_cast<uint64_t*>(hhdm_request.response->offset + base);
-	memset(bitmap, 0, (totalFrames + 63) / 64 * sizeof(uint64_t));
 
-	const uint64_t bitmapFrames = ((totalFrames + 63) / 64 * sizeof(uint64_t) + SMALL_SIZE - 1) / SMALL_SIZE;
-	for (uint64_t i = 0; i < bitmapFrames; ++i) reserve(reinterpret_cast<void*>(memoryBase + i * SMALL_SIZE));
+	for (uint64_t i = 0; i < bitmapPages; ++i) reserve(reinterpret_cast<void*>(bitmapPhys + i * SMALL_SIZE));
 }
 
 void* FrameAllocator::alloc()
@@ -361,7 +403,7 @@ void FrameAllocator::free(void* frame)
 
 	const auto addr = reinterpret_cast<uint64_t>(frame);
 	const uint64_t phys = addr - hhdm_request.response->offset;
-	if (phys >= memoryBase + memorySize || (phys - memoryBase) % SMALL_SIZE != 0) return;
+	if (phys < memoryBase || phys >= memoryBase + memorySize || (phys - memoryBase) % SMALL_SIZE != 0) return;
 
 	const uint64_t index = (phys - memoryBase) / SMALL_SIZE;
 	bitmap[index / 64] &= ~(1ULL << (index % 64));
@@ -370,11 +412,9 @@ void FrameAllocator::free(void* frame)
 
 void FrameAllocator::reserve(void* frame)
 {
-	LockGuard guard(frameAllocatorLock);
-
 	const auto addr = reinterpret_cast<uint64_t>(frame);
 	const uint64_t phys = addr - hhdm_request.response->offset;
-	if (phys >= memoryBase + memorySize || (phys - memoryBase) % SMALL_SIZE != 0) return;
+	if (phys < memoryBase || phys >= memoryBase + memorySize || (phys - memoryBase) % SMALL_SIZE != 0) return;
 
 	const uint64_t index = (phys - memoryBase) / SMALL_SIZE;
 	bitmap[index / 64] |= 1ULL << (index % 64);
@@ -387,7 +427,7 @@ bool FrameAllocator::used(void* frame)
 
 	const auto addr = reinterpret_cast<uint64_t>(frame);
 	const uint64_t phys = addr - hhdm_request.response->offset;
-	if (phys >= memoryBase + memorySize || (phys - memoryBase) % SMALL_SIZE != 0) return false;
+	if (phys < memoryBase || phys >= memoryBase + memorySize || (phys - memoryBase) % SMALL_SIZE != 0) return false;
 
 	const uint64_t index = (phys - memoryBase) / SMALL_SIZE;
 	return bitmap[index / 64] & (1ULL << (index % 64));

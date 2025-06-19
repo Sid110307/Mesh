@@ -35,26 +35,10 @@ void GDTManager::load()
 	uint16_t dataSel = GDT_DATA << 3, codeSel = GDT_CODE << 3;
 
 	asm volatile ("lgdt %0" :: "m"(gdtPointer) : "memory");
-	asm volatile (
-		"mov %[sel], %%ax\n"
-		"mov %%ax, %%ds\n"
-		"mov %%ax, %%es\n"
-		"mov %%ax, %%fs\n"
-		"mov %%ax, %%gs\n"
-		"mov %%ax, %%ss\n"
-		:: [sel] "r"(dataSel)
-		: "rax"
-	);
-	asm volatile (
-		"mov %[cs], %%ax\n"
-		"pushq %%rax\n"
-		"lea 1f(%%rip), %%rax\n"
-		"pushq %%rax\n"
-		"retfq\n"
-		"1:\n"
-		:: [cs] "r"(codeSel)
-		: "rax", "memory"
-	);
+	asm volatile ("mov %[sel], %%ax\nmov %%ax, %%ds\nmov %%ax, %%es\nmov %%ax, %%fs\nmov %%ax, %%gs\nmov %%ax, %%ss\n"
+		:: [sel] "r"(dataSel) : "rax");
+	asm volatile ("mov %[cs], %%ax\npushq %%rax\nlea 1f(%%rip), %%rax\npushq %%rax\nretfq\n1:\n" :: [cs] "r"(codeSel) :
+		"rax", "memory");
 }
 
 void GDTManager::setTSS(size_t cpuIndex, uint64_t rsp0)
@@ -63,7 +47,8 @@ void GDTManager::setTSS(size_t cpuIndex, uint64_t rsp0)
 	kernelTSS[cpuIndex].rsp[0] = rsp0;
 	kernelTSS[cpuIndex].ioMapBase = sizeof(TSS);
 
-	for (int i = 0; i < 7; ++i) kernelTSS[cpuIndex].ist[i] = reinterpret_cast<uint64_t>(&istStacks[i][8192]);
+	for (int i = 0; i < 7; ++i)
+		kernelTSS[cpuIndex].ist[i] = reinterpret_cast<uint64_t>(&istStacks[i]) + sizeof(istStacks[i]);
 	auto base = reinterpret_cast<uint64_t>(&kernelTSS[cpuIndex]);
 	uint32_t limit = sizeof(TSS) - 1;
 

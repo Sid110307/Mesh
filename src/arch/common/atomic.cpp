@@ -16,7 +16,7 @@ void Atomic::store(uint32_t val) noexcept { asm volatile ("movl %1, %0" : "=m"(v
 
 uint32_t Atomic::increment() noexcept
 {
-	uint32_t old_val = 1;
+	uint32_t old_val = 0;
 	asm volatile ("lock xaddl %0, %1" : "+r"(old_val), "+m"(value) :: "memory", "cc");
 
 	return old_val + 1;
@@ -25,9 +25,10 @@ uint32_t Atomic::increment() noexcept
 bool Atomic::compareExchange(uint32_t& expected, uint32_t desired) noexcept
 {
 	uint8_t success;
-	asm volatile ("lock cmpxchgl %2, %1\nsete %0" : "=q"(success), "+m"(value), "+a"(expected) : "r"(desired) : "memory"
-		,
+	uint32_t temp = expected;
+	asm volatile ("lock cmpxchgl %3, %1\nsete %0" : "=q"(success), "+m"(value) : "a"(temp), "r"(desired) : "memory",
 		"cc");
 
-	return success != 0;
+	if (!success) expected = load();
+	return success;
 }

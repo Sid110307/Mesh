@@ -44,9 +44,9 @@ void initGDT()
 	Renderer::printf("\x1b[36mInitializing GDT... ");
 	static uint8_t kernelStack[SMP::SMP_STACK_SIZE] __attribute__((aligned(16)));
 
-	GDTManager gdtManager;
+	[[maybe_unused]] GDTManager gdtManager;
 	GDTManager::load();
-	gdtManager.setTSS(reinterpret_cast<uint64_t>(kernelStack + sizeof(kernelStack)));
+	GDTManager::setTSS(0, reinterpret_cast<uint64_t>(&kernelStack[SMP::SMP_STACK_SIZE]));
 
 	Renderer::printf("\x1b[32mDone!\n");
 }
@@ -61,30 +61,15 @@ void initIDT()
 void initPaging()
 {
 	Renderer::printf("\x1b[36mInitializing Paging... ");
-	uint64_t base = 0, size = 0;
-
-	for (size_t i = 0; i < memory_request.response->entry_count; ++i)
-	{
-		auto* entry = memory_request.response->entries[i];
-		if (entry->type != LIMINE_MEMMAP_USABLE || entry->base < 0x100000) continue;
-
-		uint64_t alignedBase = (entry->base + 0xFFF) & ~0xFFFULL;
-		if (uint64_t alignedSize = entry->length - (alignedBase - entry->base); alignedSize >=
-			FrameAllocator::SMALL_SIZE && alignedSize > size)
-		{
-			base = alignedBase;
-			size = alignedSize;
-		}
-	}
-
-	if (!base)
-	{
-		Renderer::printf("\x1b[31mFailed to find usable memory!\n");
-		while (true) asm volatile ("hlt");
-	}
-
-	FrameAllocator::init(base, size);
+	FrameAllocator::init();
 	Paging::init();
+	Renderer::printf("\x1b[32mDone!\n");
+}
+
+void initSMP()
+{
+	Renderer::printf("\x1b[36mInitializing SMP... ");
+	SMP::init();
 	Renderer::printf("\x1b[32mDone!\n");
 }
 
@@ -107,24 +92,20 @@ void initAPIC()
 	val |= 1 << 8;
 	val = (val & 0xFFFFFF00) | 0xFF;
 	*svr = val;
-}
 
-void initSMP()
-{
-	Renderer::printf("\x1b[36mInitializing SMP... ");
-	SMP::init();
-	Renderer::printf("\x1b[32mDone!\n");
+	asm volatile ("sti");
 }
 
 extern "C" [[noreturn]] void kernelMain()
 {
 	initRenderer();
+	Renderer::setSerialPrint(true);
 	dumpStats();
 	initGDT();
 	initIDT();
 	initPaging();
-	initAPIC();
 	initSMP();
+	initAPIC();
 
 	while (true) asm volatile ("hlt");
 }

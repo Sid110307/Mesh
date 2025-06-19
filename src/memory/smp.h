@@ -10,6 +10,7 @@ class SMP
 public:
 	static void init();
 	static uint32_t getCpuCount();
+	static uint32_t getCpuId();
 	static uint32_t getLapicID();
 
 	static constexpr size_t MAX_CPUS = 256, SMP_STACK_SIZE = 8192;

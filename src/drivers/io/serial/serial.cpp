@@ -31,8 +31,8 @@ void Serial::printf(const char* fmt, ...)
 
 	va_list args;
 	va_start(args, fmt);
-	vformat(fmt, args, [](const char c) { write(c); }, [](const char* s) { write(s); },
-	        [](const uint64_t h) { writeHex(h); }, [](const uint64_t d) { writeDec(d); });
+	vformat(fmt, args, [](const char c) { writeByte(c); }, [](const char* s) { write(s); },
+	        [](const uint64_t h) { writeHexUnlocked(h); }, [](const uint64_t d) { writeDecUnlocked(d); });
 	va_end(args);
 }
 
@@ -52,7 +52,13 @@ void Serial::write(const char* str, const size_t len)
 	for (size_t i = 0; i < len; ++i) writeByte(static_cast<uint8_t>(str[i]));
 }
 
-void Serial::write(const uint8_t byte) { write(reinterpret_cast<const char*>(&byte), sizeof(byte)); }
+void Serial::writeByte(const uint8_t byte)
+{
+	int timeout = 100000;
+	while (!(inb(port + 5) & 0x20) && timeout--) asm volatile ("pause");
+
+	outb(port, byte);
+}
 
 void Serial::writeHex(const uint64_t value)
 {
@@ -66,12 +72,14 @@ void Serial::writeDec(const uint64_t value)
 	write(utoa(value, buffer, sizeof(buffer)));
 }
 
-void Serial::writeByte(const uint8_t byte)
+void Serial::writeHexUnlocked(const uint64_t value)
 {
-	int timeout = 100000;
-	while (!(inb(port + 5) & 0x20) && timeout--)
-	{
-	}
+	char buffer[33];
+	for (const char* p = utoa(value, buffer, sizeof(buffer), 16); *p; ++p) writeByte(*p);
+}
 
-	outb(port, byte);
+void Serial::writeDecUnlocked(const uint64_t value)
+{
+	char buffer[33];
+	for (const char* p = utoa(value, buffer, sizeof(buffer)); *p; ++p) writeByte(*p);
 }

@@ -95,6 +95,22 @@ char* strtok_r(char* str, const char* delim, char** savePtr)
 	return tokenStart;
 }
 
+void swap(uint32_t& a, uint32_t& b) noexcept
+{
+	const uint32_t temp = a;
+	a = b;
+	b = temp;
+}
+
+uint64_t ffsll(uint64_t value) noexcept
+{
+	if (value == 0) return 0;
+	uint64_t index;
+
+	asm volatile ("bsfq %1, %0" : "=r"(index) : "r"(value));
+	return index + 1;
+}
+
 void* memcpy(void* dest, const void* src, size_t n)
 {
 	if (!dest || !src || n == 0) return dest;
