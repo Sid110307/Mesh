@@ -15,7 +15,7 @@ GDTEntry gdt[GDT_ENTRIES] __attribute__((aligned(8))) = {};
 GDTPointer gdtPointer = {};
 }
 
-static uint8_t istStacks[7][8192] __attribute__((aligned(16)));
+static uint8_t istStacks[SMP::MAX_CPUS][7][8192] __attribute__((aligned(16)));
 TSS kernelTSS[SMP::MAX_CPUS] __attribute__((aligned(16)));
 
 GDTManager::GDTManager()
@@ -48,7 +48,8 @@ void GDTManager::setTSS(size_t cpuIndex, uint64_t rsp0)
 	kernelTSS[cpuIndex].ioMapBase = sizeof(TSS);
 
 	for (int i = 0; i < 7; ++i)
-		kernelTSS[cpuIndex].ist[i] = reinterpret_cast<uint64_t>(&istStacks[i]) + sizeof(istStacks[i]);
+		kernelTSS[cpuIndex].ist[i] = reinterpret_cast<uint64_t>(&istStacks[cpuIndex][i]) + sizeof(istStacks[cpuIndex][
+			i]);
 	auto base = reinterpret_cast<uint64_t>(&kernelTSS[cpuIndex]);
 	uint32_t limit = sizeof(TSS) - 1;
 

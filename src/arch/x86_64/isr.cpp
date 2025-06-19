@@ -106,6 +106,7 @@ static void showException(InterruptFrame* frame, uint64_t intNum, uint64_t error
 			if (errorCode & (1 << 6)) Renderer::printf("- Shadow stack access violation\n");
 			if (errorCode & (1 << 15)) Renderer::printf("- SGX access violation\n");
 
+
 			break;
 		}
 		case 15:

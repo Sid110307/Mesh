@@ -90,5 +90,5 @@ add_custom_target(run
         COMMAND ${QEMU_EXECUTABLE} -s -no-reboot -m 512M -smp 4 -cdrom ${OUT_DIR}/Mesh.iso -serial mon:stdio
         DEPENDS iso
         WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
-        COMMENT "🚀 Running Mesh in QEMU..."
+        COMMENT "🚀 Running Mesh in QEMU"
 )

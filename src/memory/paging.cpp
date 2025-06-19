@@ -17,7 +17,7 @@ static uint64_t memorySize = 0;
 static uint64_t totalFrames = 0;
 static uint64_t usedFrames = 0;
 static uint64_t* bitmap = nullptr;
-static uint64_t* pml4 = nullptr;
+uint64_t* pml4 = nullptr;
 
 static uint64_t* createPageTable()
 {
@@ -50,7 +50,7 @@ void Paging::init()
 	if (!pml4)
 	{
 		Serial::printf("Failed to create PML4 table.\n");
-		while (true) asm volatile("hlt");
+		while (true) asm volatile ("hlt");
 	}
 
 	uint64_t kernelPhysStart = kernel_addr_request.response->physical_base;
@@ -65,12 +65,12 @@ void Paging::init()
 		if (!mapSmall(phys, phys, PageFlags::PRESENT | PageFlags::RW))
 		{
 			Serial::printf("Failed to map kernel page at 0x%lx to 0x%lx.\n", phys, virt);
-			while (true) asm volatile("hlt");
+			while (true) asm volatile ("hlt");
 		}
 		if (!mapSmall(virt, phys, PageFlags::PRESENT | PageFlags::RW))
 		{
 			Serial::printf("Failed to map kernel page at 0x%lx to 0x%lx.\n", virt, phys);
-			while (true) asm volatile("hlt");
+			while (true) asm volatile ("hlt");
 		}
 	}
 
@@ -84,7 +84,7 @@ void Paging::init()
 			if (!mapSmall(addr, addr, PageFlags::PRESENT | PageFlags::RW))
 			{
 				Serial::printf("Failed to map framebuffer page at 0x%lx.\n", addr);
-				while (true) asm volatile("hlt");
+				while (true) asm volatile ("hlt");
 			}
 	}
 
@@ -99,18 +99,16 @@ void Paging::init()
 		if (!mapSmall(hhdm_request.response->offset + phys, phys, PageFlags::PRESENT | PageFlags::RW))
 		{
 			Serial::printf("Failed to map HHDM page at 0x%lx.\n", hhdm_request.response->offset + phys);
-			while (true) asm volatile("hlt");
+			while (true) asm volatile ("hlt");
 		}
 
 	if (!mapSmall(SMP::LAPIC_BASE, SMP::LAPIC_BASE, PageFlags::PRESENT | PageFlags::RW))
 	{
 		Serial::printf("Failed to map LAPIC page at 0x%lx.\n", SMP::LAPIC_BASE);
-		while (true) asm volatile("hlt");
+		while (true) asm volatile ("hlt");
 	}
 
 	uint64_t pml4Phys = reinterpret_cast<uint64_t>(pml4) - hhdm_request.response->offset;
-
-	asm volatile("cli");
 	asm volatile ("mov %0, %%cr3" :: "r"(pml4Phys) : "memory");
 	uint64_t cr4;
 	asm volatile ("mov %%cr4, %0" : "=r"(cr4));
@@ -366,7 +364,7 @@ void FrameAllocator::init()
 	if (bestBase == 0 || bestSize == 0)
 	{
 		Serial::printf("No memory region for frame allocator\n");
-		while (true) asm volatile("hlt");
+		while (true) asm volatile ("hlt");
 	}
 
 	uint64_t total = bestSize / SMALL_SIZE, bitmapBytes = ((total + 63) / 64) * sizeof(uint64_t),

@@ -66,13 +66,6 @@ void initPaging()
 	Renderer::printf("\x1b[32mDone!\n");
 }
 
-void initSMP()
-{
-	Renderer::printf("\x1b[36mInitializing SMP... ");
-	SMP::init();
-	Renderer::printf("\x1b[32mDone!\n");
-}
-
 void initAPIC()
 {
 	constexpr uint32_t IA32_APIC_BASE_MSR = 0x1B;
@@ -92,20 +85,17 @@ void initAPIC()
 	val |= 1 << 8;
 	val = (val & 0xFFFFFF00) | 0xFF;
 	*svr = val;
-
-	asm volatile ("sti");
 }
 
 extern "C" [[noreturn]] void kernelMain()
 {
 	initRenderer();
-	Renderer::setSerialPrint(true);
 	dumpStats();
+	initPaging();
 	initGDT();
 	initIDT();
-	initPaging();
-	initSMP();
 	initAPIC();
+	SMP::init();
 
 	while (true) asm volatile ("hlt");
 }

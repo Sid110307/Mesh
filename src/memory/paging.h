@@ -29,6 +29,8 @@ constexpr PageFlags operator&(PageFlags a, PageFlags b)
 
 constexpr PageFlags operator~(PageFlags flag) { return static_cast<PageFlags>(~static_cast<uint64_t>(flag)); }
 
+extern uint64_t* pml4;
+
 class Paging
 {
 public:

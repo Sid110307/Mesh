@@ -13,9 +13,9 @@ extern "C" void* const isrList[32] = {
 
 void IDTManager::init()
 {
-	for (int i = 0; i < 32; ++i) setEntry(i, reinterpret_cast<void (*)()>(isrList[i]));
+	for (int i = 0; i < 32; ++i)
+		setEntry(i, reinterpret_cast<void (*)()>(isrList[i]), 0x8E, i == 8 ? 1 : i == 14 ? 2 : 0);
 	asm volatile ("lidt %0" :: "m"(idtPointer));
-	asm volatile ("sti");
 }
 
 void IDTManager::setEntry(const uint8_t vector, void (*isr)(), const uint8_t flags, const uint8_t ist)
