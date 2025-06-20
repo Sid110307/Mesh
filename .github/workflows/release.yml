@@ -31,9 +31,13 @@ jobs:
         with:
           name: Mesh.iso
           path: ./release-assets
+      - name: Set up Release Tag
+        run: echo "release_tag=$(date +'%Y-%m-%d_%H-%M')" >> $GITHUB_ENV
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
-        with:
-          files: ./release-assets/Mesh.iso
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ env.release_tag }}
+          name: Release ${{ env.release_tag }}
+          files: ./release-assets/Mesh.iso
