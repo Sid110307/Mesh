@@ -16,12 +16,16 @@ jobs:
         run: cmake -S ${{ github.workspace }} -B bin
       - name: Build
         run: cmake --build bin --target iso --config Release
+      - name: Create ISO
+        uses: actions/upload-artifact@v4
+        with:
+          name: Mesh.iso
+          path: bin/bin/Mesh.iso
   release:
     name: Create Release
     needs: build
     runs-on: ubuntu-latest
     steps:
-      - run: ls -R
       - name: Download ISO
         uses: actions/download-artifact@v4
         with:
