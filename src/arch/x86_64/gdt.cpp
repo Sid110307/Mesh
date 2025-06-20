@@ -1,8 +1,7 @@
-#include "./gdt.h"
-
-#include "../../memory/smp.h"
-#include "../../core/utils.h"
-#include "../../boot/limine.h"
+#include <arch/x86_64/gdt.h>
+#include <memory/smp.h>
+#include <core/utils.h>
+#include <boot/limine.h>
 
 extern limine_hhdm_request hhdm_request;
 

@@ -1,16 +1,16 @@
-#include "./paging.h"
-#include "./smp.h"
-#include "../drivers/io/serial/serial.h"
-#include "../arch/common/spinlock.h"
-#include "../boot/limine.h"
+#include <memory/paging.h>
+#include <memory/smp.h>
+#include <drivers/io/serial/serial.h>
+#include <boot/limine.h>
 
 extern limine_framebuffer_request framebuffer_request;
 extern limine_memmap_request memory_request;
 extern limine_hhdm_request hhdm_request;
 extern limine_kernel_address_request kernel_addr_request;
-
 extern uint8_t _kernel_start[], _kernel_end[];
-static Spinlock pagingLock, frameAllocatorLock;
+
+Spinlock Paging::pagingLock;
+Spinlock FrameAllocator::frameAllocatorLock;
 
 static uint64_t memoryBase = 0;
 static uint64_t memorySize = 0;
@@ -109,6 +109,12 @@ void Paging::init()
 	}
 
 	uint64_t pml4Phys = reinterpret_cast<uint64_t>(pml4) - hhdm_request.response->offset;
+	if (!mapSmall(reinterpret_cast<uint64_t>(pml4), pml4Phys, PageFlags::PRESENT | PageFlags::RW))
+	{
+		Serial::printf("Failed to map PML4 page at 0x%lx.\n", reinterpret_cast<uint64_t>(pml4));
+		while (true) asm volatile ("hlt");
+	}
+
 	asm volatile ("mov %0, %%cr3" :: "r"(pml4Phys) : "memory");
 	uint64_t cr4;
 	asm volatile ("mov %%cr4, %0" : "=r"(cr4));
@@ -392,6 +398,8 @@ void* FrameAllocator::alloc()
 
 			return reinterpret_cast<void*>(memoryBase + i * SMALL_SIZE);
 		}
+
+	Serial::printf("Out of memory in FrameAllocator! Used: %lu, Total: %lu\n", usedFrames, totalFrames);
 	return nullptr;
 }
 

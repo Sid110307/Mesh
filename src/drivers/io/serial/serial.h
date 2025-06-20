@@ -1,6 +1,7 @@
 #pragma once
 
-#include "../../../core/utils.h"
+#include <arch/common/spinlock.h>
+#include <core/utils.h>
 
 class Serial
 {
@@ -8,16 +9,18 @@ public:
 	static void init();
 	static void printf(const char* fmt, ...);
 
-	static void write(const char* str);
-	static void write(const char* str, size_t len);
-	static void writeByte(uint8_t byte);
-	static void writeHex(uint64_t value);
-	static void writeDec(uint64_t value);
+	static void printChar(uint8_t c);
+	static void print(const char* str);
+	static void printHex(uint64_t value);
+	static void printDec(uint64_t value);
 
 private:
-	static void writeHexUnlocked(uint64_t value);
-	static void writeDecUnlocked(uint64_t value);
+	static void printCharUnlocked(uint8_t c);
+	static void printUnlocked(const char* str);
+	static void printHexUnlocked(uint64_t value);
+	static void printDecUnlocked(uint64_t value);
 
 	inline static uint16_t port = 0x3F8;
 	inline static bool initialized = false;
+	static Spinlock serialLock;
 };

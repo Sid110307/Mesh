@@ -1,13 +1,10 @@
-#include "./renderer.h"
-
-#include "../../arch/common/spinlock.h"
-#include "../io/serial/serial.h"
-#include "../../boot/limine.h"
+#include <drivers/video/renderer.h>
+#include <drivers/io/serial/serial.h>
+#include <boot/limine.h>
 
 extern limine_framebuffer_request framebuffer_request;
 extern uint8_t asset_src_assets_fonts_zap_ext_light18_psf_start[];
-
-static Spinlock renderLock;
+Spinlock Renderer::renderLock;
 
 void Renderer::init()
 {
@@ -180,7 +177,7 @@ void Renderer::escapeAnsi(const char* seq, uint32_t& fg, uint32_t& bg, const uin
 void Renderer::scroll()
 {
 	LockGuard guard(renderLock);
-	if (!fbReady() || font.height == 0 || font.width == 0)
+	if (!fbReady())
 	{
 		Serial::printf("Renderer: Cannot scroll, framebuffer or font not initialized.\n");
 		return;
@@ -326,6 +323,8 @@ void Renderer::ansiPutChar(const char c)
 		}
 		else if (escLen >= sizeof(escBuf) - 1)
 		{
+			Serial::printf("Renderer: ANSI escape sequence too long: %s\n", escBuf);
+
 			inEscape = false;
 			escLen = 0;
 		}
@@ -364,7 +363,11 @@ inline void Renderer::drawGlyph(const uint32_t px, const uint32_t py, const char
 			fbAddress[(py + y) * (fbPitch / 4) + (px + x)] = (glyph[y] & (1 << (7 - x))) ? fg : bg;
 }
 
-inline bool Renderer::fbReady() { return fbAddress && font.glyphBuffer; }
+inline bool Renderer::fbReady()
+{
+	return fbAddress && font.glyphBuffer && font.width > 0 && font.height > 0 && fbWidth > 0 && fbHeight > 0 && fbPitch
+		> 0;
+}
 
 void Renderer::printCharUnlocked(const char c, const uint32_t fg, const uint32_t bg)
 {
@@ -426,6 +429,17 @@ void Renderer::printCharUnlocked(const char c, const uint32_t fg, const uint32_t
 
 void Renderer::printUnlocked(const char* str, const uint32_t fgDefault, const uint32_t bgDefault)
 {
+	if (!fbReady())
+	{
+		Serial::printf("Renderer: Cannot print, framebuffer not initialized.\n");
+		return;
+	}
+	if (!str)
+	{
+		Serial::printf("Renderer: Invalid string.\n");
+		return;
+	}
+
 	uint32_t fg = fgDefault, bg = bgDefault;
 
 	bool inEscape = false;

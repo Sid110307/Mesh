@@ -1,7 +1,5 @@
-#include "./isr.h"
-
-#include "../../memory/paging.h"
-#include "../../drivers/video/renderer.h"
+#include <arch/x86_64/isr.h>
+#include <drivers/video/renderer.h>
 
 static void showException(InterruptFrame* frame, uint64_t intNum, uint64_t errorCode)
 {
@@ -105,7 +103,6 @@ static void showException(InterruptFrame* frame, uint64_t intNum, uint64_t error
 			if (errorCode & (1 << 5)) Renderer::printf("- Protection-key violation\n");
 			if (errorCode & (1 << 6)) Renderer::printf("- Shadow stack access violation\n");
 			if (errorCode & (1 << 15)) Renderer::printf("- SGX access violation\n");
-
 
 			break;
 		}

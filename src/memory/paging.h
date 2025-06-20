@@ -1,6 +1,7 @@
 #pragma once
 
-#include "../core/utils.h"
+#include <arch/common/spinlock.h>
+#include <core/utils.h>
 
 enum class PageFlags : uint64_t
 {
@@ -48,6 +49,8 @@ private:
 	static void cleanup(uint64_t* startTable, uint16_t startIndex, int startLevel, uint64_t pdptIndex, uint64_t pdIndex,
 	                    const uint64_t* pd, const uint64_t* pdpt);
 	static bool cleanupPageTable(uint64_t* rootTable, uint16_t rootIndex, int rootLevel);
+
+	static Spinlock pagingLock;
 };
 
 class FrameAllocator
@@ -61,6 +64,8 @@ public:
 
 	static uint64_t usedCount();
 	static uint64_t totalCount();
+	static Spinlock frameAllocatorLock;
+
 	static constexpr uint64_t SMALL_SIZE = 4096, MEDIUM_SIZE = 2ULL * 1024 * 1024,
 	                          LARGE_SIZE = 1ULL * 1024 * 1024 * 1024, BIOS_START = 0x100000;
 };

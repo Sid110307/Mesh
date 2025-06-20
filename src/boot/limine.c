@@ -1,4 +1,4 @@
-#include "../boot/limine.h"
+#include <boot/limine.h>
 
 __attribute__((used, section(".limine_requests"))) volatile struct limine_framebuffer_request framebuffer_request
 	= {

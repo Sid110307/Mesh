@@ -1,9 +1,9 @@
-#include "../drivers/video/renderer.h"
-#include "../arch/x86_64/gdt.h"
-#include "../arch/x86_64/idt.h"
-#include "../memory/paging.h"
-#include "../memory/smp.h"
-#include "../boot/limine.h"
+#include <drivers/video/renderer.h>
+#include <arch/x86_64/gdt.h>
+#include <arch/x86_64/idt.h>
+#include <memory/paging.h>
+#include <memory/smp.h>
+#include <boot/limine.h>
 
 extern limine_framebuffer_request framebuffer_request;
 extern limine_memmap_request memory_request;
@@ -90,6 +90,7 @@ void initAPIC()
 extern "C" [[noreturn]] void kernelMain()
 {
 	initRenderer();
+	Renderer::setSerialPrint(true);
 	dumpStats();
 	initPaging();
 	initGDT();

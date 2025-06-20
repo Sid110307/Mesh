@@ -1,4 +1,4 @@
-#include "./atomic.h"
+#include <arch/common/atomic.h>
 
 Atomic::Atomic(const uint32_t init) : value(init)
 {

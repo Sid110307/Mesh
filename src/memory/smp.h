@@ -1,7 +1,8 @@
 #pragma once
 
-#include "../arch/common/atomic.h"
-#include "../core/utils.h"
+#include <arch/common/atomic.h>
+#include <arch/common/spinlock.h>
+#include <core/utils.h>
 
 class SMP
 {
@@ -18,4 +19,5 @@ public:
 
 private:
 	static void waitForAPs();
+	static Spinlock smpLock;
 };

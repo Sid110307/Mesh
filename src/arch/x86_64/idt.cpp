@@ -1,5 +1,5 @@
-#include "./idt.h"
-#include "./isr.h"
+#include <arch/x86_64/idt.h>
+#include <arch/x86_64/isr.h>
 
 static IDTEntry idt[256];
 static IDTPointer idtPointer = {sizeof(idt) - 1, reinterpret_cast<uint64_t>(idt)};

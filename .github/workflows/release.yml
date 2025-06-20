@@ -21,6 +21,7 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     steps:
+      - run: ls -R
       - name: Download ISO
         uses: actions/download-artifact@v4
         with:

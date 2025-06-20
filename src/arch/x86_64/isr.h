@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../../core/utils.h"
+#include <core/utils.h>
 
 struct InterruptFrame
 {

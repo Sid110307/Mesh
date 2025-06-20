@@ -1,23 +1,20 @@
-#include "./smp.h"
-#include "./paging.h"
-
-#include "../drivers/video/renderer.h"
-#include "../drivers/io/serial/serial.h"
-#include "../arch/common/spinlock.h"
-#include "../arch/x86_64/gdt.h"
-#include "../arch/x86_64/idt.h"
-#include "../boot/limine.h"
+#include <memory/smp.h>
+#include <memory/paging.h>
+#include <drivers/video/renderer.h>
+#include <arch/x86_64/gdt.h>
+#include <arch/x86_64/idt.h>
+#include <boot/limine.h>
 
 extern limine_hhdm_request hhdm_request;
 extern limine_kernel_address_request kernel_addr_request;
 extern limine_smp_request smp_request;
 
 extern "C" void trampoline();
+Spinlock SMP::smpLock;
 
 alignas(4096) static uint8_t kernelStacks[SMP::MAX_CPUS][SMP::SMP_STACK_SIZE];
 alignas(4096) static uint8_t apStacks[SMP::MAX_CPUS][SMP::SMP_STACK_SIZE];
 static uint32_t lapicIDs[SMP::MAX_CPUS] = {};
-static Spinlock smpLock;
 
 Atomic SMP::apReadyCount{0};
 uint32_t SMP::cpuCount = 0;
@@ -25,7 +22,12 @@ uint32_t cpuIDs[SMP::MAX_CPUS] = {};
 
 extern "C" [[noreturn]] void apMain()
 {
+	uint64_t rsp;
+	asm volatile ("mov %%rsp, %0" : "=r"(rsp));
+	Renderer::printf("[AP] Current RSP before CR3 switch: 0x%lx\n", rsp);
+
 	uint64_t cr3 = reinterpret_cast<uint64_t>(pml4) - hhdm_request.response->offset;
+	asm volatile("" ::: "memory");
 	asm volatile("mov %0, %%cr3" :: "r"(cr3) : "memory");
 
 	uint32_t id = SMP::getCpuID();
@@ -37,16 +39,7 @@ extern "C" [[noreturn]] void apMain()
 	GDTManager::setTSS(id, reinterpret_cast<uint64_t>(&kernelStacks[id][SMP::SMP_STACK_SIZE]));
 
 	SMP::apReadyCount.increment();
-	Serial::printf("[AP] Core with LAPIC ID %u is online\n", id);
-	for (uint32_t i = 0; i < SMP::cpuCount; ++i)
-	{
-		Serial::printf("[AP] LAPIC ID #%u: %u\n", i, lapicIDs[i]);
-		if (lapicIDs[i] == SMP::getLapicID())
-		{
-			Serial::printf("[AP] Core #%u is now online\n", i);
-			break;
-		}
-	}
+	Renderer::printf("[AP] Core with LAPIC ID %u is online\n", id);
 
 	asm volatile ("sti");
 	while (true) asm volatile ("hlt");
@@ -82,12 +75,13 @@ void SMP::init()
 			continue;
 		}
 
-		lapicIDs[i] = cpu->lapic_id;
 		if (cpu->lapic_id == smp_request.response->bsp_lapic_id) continue;
+		lapicIDs[i] = cpu->lapic_id;
 		GDTManager::setTSS(i, reinterpret_cast<uint64_t>(&kernelStacks[i][SMP_STACK_SIZE]));
 
-		const uint64_t stackVirt = reinterpret_cast<uint64_t>(&apStacks[i][0]),
-		               stackPhys = stackVirt - hhdm_request.response->offset;
+		const uint64_t stackVirt = reinterpret_cast<uint64_t>(&apStacks[i][0]), stackPhys = stackVirt -
+			               kernel_addr_request.response->virtual_base + kernel_addr_request.response->physical_base;
+
 		for (size_t offset = 0; offset < SMP_STACK_SIZE; offset += FrameAllocator::SMALL_SIZE)
 			if (!Paging::mapSmall(stackVirt + offset, stackPhys + offset, PageFlags::PRESENT | PageFlags::RW))
 			{
@@ -95,7 +89,7 @@ void SMP::init()
 				return;
 			}
 
-		cpu->extra_argument = stackVirt + SMP_STACK_SIZE;
+		cpu->extra_argument = (stackVirt + SMP_STACK_SIZE) & ~0xFULL;
 		cpu->goto_address = reinterpret_cast<uint8_t*>(trampoline);
 		Renderer::printf("\x1b[33m[AP] \x1b[93mQueued core #%u (LAPIC %u)\x1b[0m\n", i, cpu->lapic_id);
 	}
@@ -108,9 +102,9 @@ uint32_t SMP::getCpuCount() { return cpuCount; }
 uint32_t SMP::getCpuID()
 {
 	const uint32_t lapic = getLapicID();
-	for (uint32_t i = 0; i < cpuCount; ++i) if (lapicIDs[i] == lapic) return i;
+	for (uint32_t i = 0; i < MAX_CPUS; ++i) if (lapicIDs[i] == lapic) return i;
 
-	Serial::printf("[SMP] Failed to find LAPIC ID %u in CPU list!\n", lapic);
+	Renderer::printf("[SMP] Failed to find LAPIC ID %u in CPU list!\n", lapic);
 	while (true) asm volatile ("hlt");
 }
 

@@ -1,6 +1,7 @@
 #pragma once
 
-#include "../../core/utils.h"
+#include <arch/common/spinlock.h>
+#include <core/utils.h>
 
 struct __attribute__((packed)) PSF1Header
 {
@@ -56,4 +57,5 @@ private:
 	inline static uint32_t* fbAddress = nullptr;
 	inline static uint32_t ansiFg = WHITE, ansiBg = BLACK, cursorX = 0, cursorY = 0, tabWidth = 4;
 	inline static Font font;
+	static Spinlock renderLock;
 };

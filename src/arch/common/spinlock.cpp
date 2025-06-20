@@ -1,4 +1,4 @@
-#include "./spinlock.h"
+#include <arch/common/spinlock.h>
 
 Spinlock::Spinlock() : locked(0)
 {
