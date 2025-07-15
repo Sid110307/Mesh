@@ -63,7 +63,7 @@ void Serial::printDec(const uint64_t value)
 
 void Serial::printCharUnlocked(const uint8_t c)
 {
-	int timeout = 100000;
+	int timeout = 1000000;
 	while (!(inb(port + 5) & 0x20) && timeout--) asm volatile ("pause");
 
 	outb(port, c);

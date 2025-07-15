@@ -4,7 +4,7 @@
 
 ### Features
 
-#### Done
+#### Current
 
 - [x] x86_64 architecture
 - [x] Limine bootloader
@@ -47,6 +47,24 @@
 - [Limine](https://limine-bootloader.org/)
 - [CMake](https://cmake.org/)
 - [QEMU](https://www.qemu.org/) (optional)
+
+### Installing Limine
+
+```bash
+$ git clone --branch=v9.x https://github.com/limine-bootloader/limine.git
+$ cd limine
+$ ./bootstrap
+$ ./configure
+$ make
+$ sudo make install
+```
+
+```bash
+$ git clone --branch=v9.x-binary https://github.com/limine-bootloader/limine.git limine-binary
+$ cd limine-binary
+$ make
+$ sudo make install
+```
 
 ## Quick Start
 

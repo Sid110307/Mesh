@@ -23,21 +23,9 @@ uint32_t cpuIDs[SMP::MAX_CPUS] = {};
 
 extern "C" [[noreturn]] void apMain()
 {
-	uint64_t cr3 = reinterpret_cast<uint64_t>(pml4) - hhdm_request.response->offset;
-	asm volatile("" ::: "memory");
-	asm volatile("mov %0, %%cr3" :: "r"(cr3) : "memory");
-
-	uint32_t id = SMP::getCpuID();
-	cpuIDs[id] = id;
-
-	GDTManager gdt;
-	GDTManager::load();
-	IDTManager::init();
-	GDTManager::setTSS(id, reinterpret_cast<uint64_t>(&kernelStacks[id][SMP::SMP_STACK_SIZE]));
-
 	SMP::apReadyCount.increment();
-	Renderer::printf("[AP] Core with LAPIC ID %u is online (CPU ID %u)\n", SMP::getLapicID(), id);
-
+	Renderer::printf("\x1b[33m[AP] Core %u online!\x1b[0m\n", SMP::getCpuID());
+	
 	asm volatile ("sti");
 	while (true) asm volatile ("hlt");
 }
@@ -48,16 +36,30 @@ void SMP::init()
 
 	if (!smp_request.response || smp_request.response->cpu_count == 0) return;
 	cpuCount = smp_request.response->cpu_count;
+	
+	uint32_t low, high;
+	asm volatile("rdmsr" : "=a"(low), "=d"(high) : "c"(0x1B));
+	uint64_t lapicPhysBase = (static_cast<uint64_t>(high) << 32) | low;
+	lapicPhysBase &= 0xFFFFF000;
 
-	const auto trampolineVirt = reinterpret_cast<uint64_t>(&trampoline), trampolinePhys = trampolineVirt -
-		           kernel_addr_request.response->virtual_base + kernel_addr_request.response->physical_base;
-	if (!Paging::mapSmall(trampolinePhys, trampolinePhys, PageFlags::PRESENT | PageFlags::RW))
+	uint64_t lapicVirtBase = lapicPhysBase + hhdm_request.response->offset;
+	if (!Paging::mapSmall(lapicVirtBase, lapicPhysBase, PageFlags::PRESENT | PageFlags::RW))
 	{
-		Renderer::printf("\x1b[31m[SMP] \x1b[91mFailed to map trampoline page!\x1b[0m\n");
+		Renderer::printf("\x1b[31m[SMP] Failed to map LAPIC MMIO!\x1b[0m\n");
 		return;
 	}
 
-	lapicIDs[0] = smp_request.response->bsp_lapic_id;
+	const uint64_t trampolineVirt = reinterpret_cast<uint64_t>(&trampoline);
+	const uint64_t trampolinePhys = trampolineVirt -
+		kernel_addr_request.response->virtual_base + kernel_addr_request.response->physical_base;
+
+	if (!Paging::mapSmall(trampolineVirt, trampolinePhys, PageFlags::PRESENT | PageFlags::RW))
+	{
+		Renderer::printf("\x1b[31m[SMP] Failed to map trampoline!\x1b[0m\n");
+		return;
+	}
+
+	uint32_t logicalID = 0;
 	apCount = 0;
 
 	for (uint32_t i = 0; i < cpuCount; ++i)
@@ -65,36 +67,47 @@ void SMP::init()
 		auto* cpu = smp_request.response->cpus[i];
 		if (!cpu) continue;
 
-		if (cpu->lapic_id == smp_request.response->bsp_lapic_id) continue;
-		if (apCount >= MAX_CPUS - 1)
+		bool isBSP = cpu->lapic_id == smp_request.response->bsp_lapic_id;
+		if (!isBSP && apCount + 1 >= MAX_CPUS)
 		{
-			Renderer::printf("\x1b[31m[SMP] \x1b[91mToo many CPUs, ignoring core with LAPIC ID %u\x1b[0m\n",
-			                 cpu->lapic_id);
+			Renderer::printf("\x1b[31m[SMP] Too many CPUs! Ignoring LAPIC ID %u\x1b[0m\n", cpu->lapic_id);
 			continue;
 		}
 
-		apCount++;
-		lapicIDs[apCount] = cpu->lapic_id;
-		GDTManager::setTSS(apCount, reinterpret_cast<uint64_t>(&kernelStacks[apCount][SMP_STACK_SIZE]));
+		lapicIDs[logicalID] = cpu->lapic_id;
+		cpuIDs[logicalID] = logicalID;
+		GDTManager::setTSS(logicalID, reinterpret_cast<uint64_t>(&kernelStacks[logicalID][SMP_STACK_SIZE]));
 
-		const uint64_t stackVirt = reinterpret_cast<uint64_t>(&apStacks[apCount][0]), stackPhys = stackVirt -
-			               kernel_addr_request.response->virtual_base + kernel_addr_request.response->physical_base;
-		for (size_t offset = 0; offset < SMP_STACK_SIZE; offset += FrameAllocator::SMALL_SIZE)
-			if (!Paging::mapSmall(stackVirt + offset, stackPhys + offset, PageFlags::PRESENT | PageFlags::RW))
-			{
-				Renderer::printf("\x1b[31m[SMP] \x1b[91mFailed to map AP stack page at offset %zu!\x1b[0m\n", offset);
-				return;
-			}
+		if (!isBSP)
+		{
+			const uint64_t stackVirt = reinterpret_cast<uint64_t>(&apStacks[logicalID][0]);
+			const uint64_t stackPhys = stackVirt -
+				kernel_addr_request.response->virtual_base + kernel_addr_request.response->physical_base;
 
-		cpu->extra_argument = (stackVirt + SMP_STACK_SIZE) & ~0xFULL;
-		cpu->goto_address = reinterpret_cast<uint8_t*>(trampoline);
-		Renderer::printf("\x1b[33m[AP] \x1b[93mQueued core (LAPIC ID %u) as CPU ID %u\x1b[0m\n", cpu->lapic_id,
-		                 apCount);
+			if (SMP_STACK_SIZE == FrameAllocator::MEDIUM_SIZE && (stackVirt % FrameAllocator::MEDIUM_SIZE == 0) &&
+				(stackPhys % FrameAllocator::MEDIUM_SIZE == 0))
+				Paging::mapMedium(stackVirt, stackPhys, PageFlags::PRESENT | PageFlags::RW);
+			else for (size_t offset = 0; offset < SMP_STACK_SIZE; offset += FrameAllocator::SMALL_SIZE)
+				if (!Paging::mapSmall(stackVirt + offset, stackPhys + offset, PageFlags::PRESENT | PageFlags::RW))
+				{
+					Renderer::printf("\x1b[31m[SMP] Failed to map AP stack (offset %zu)\x1b[0m\n", offset);
+					return;
+				}
+
+			cpu->extra_argument = (stackVirt + SMP_STACK_SIZE) & ~0xFULL;
+			cpu->goto_address = reinterpret_cast<uint8_t*>(trampolineVirt);
+
+			Renderer::printf("\x1b[33m[AP] Queued core (LAPIC ID %u) as CPU ID %u\x1b[0m\n", cpu->lapic_id, logicalID);
+			apCount++;
+		}
+
+		logicalID++;
 	}
 
-	cpuCount = apCount + 1;
+	cpuCount = logicalID;
 	waitForAPs();
 }
+
 
 uint32_t SMP::getCpuCount() { return cpuCount; }
 
@@ -115,8 +128,7 @@ uint32_t SMP::getLapicID()
 {
 	uint32_t low, high;
 	asm volatile("rdmsr" : "=a"(low), "=d"(high) : "c"(0x802));
-
-	return low;
+	return (low >> 24) & 0xFF;
 }
 
 void SMP::waitForAPs()
@@ -130,7 +142,7 @@ void SMP::waitForAPs()
 	if (timeout <= 0)
 	{
 		Renderer::printf("\x1b[31mTimeout waiting for APs! Using %u cores instead of %u.\x1b[0m\n",
-		                 apReadyCount.load() + 1, cpuCount);
+						 apReadyCount.load() + 1, cpuCount);
 		cpuCount = apReadyCount.load() + 1;
 	}
 	else Renderer::printf("\x1b[32mAll %u cores online!\x1b[0m\n", cpuCount);
