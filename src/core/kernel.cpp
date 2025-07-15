@@ -22,9 +22,18 @@ void initRenderer()
 void dumpStats()
 {
 	if (framebuffer_request.response)
+	{
 		Renderer::printf("\x1b[36m[Framebuffer] \x1b[96m%ux%u\x1b[0m\n",
-		                 framebuffer_request.response->framebuffers[0]->width,
-		                 framebuffer_request.response->framebuffers[0]->height);
+						 framebuffer_request.response->framebuffers[0]->width,
+						 framebuffer_request.response->framebuffers[0]->height);
+		Renderer::printf("\x1b[36m[Framebuffer] Supported Video Modes:\n");
+		for (size_t i = 0; i < framebuffer_request.response->framebuffer_count; ++i)
+		{
+			auto fb = framebuffer_request.response->framebuffers[i];
+			Renderer::printf(" \x1b[90m-\x1b[0m %ux%u @ %u bpp\x1b[0m\n",
+			                 fb->width, fb->height, fb->bpp);
+		}
+	}
 	if (memory_request.response)
 		Renderer::printf("\x1b[36m[Memory Map] \x1b[96m%u entries\x1b[0m\n", memory_request.response->entry_count);
 	if (hhdm_request.response)
@@ -68,23 +77,21 @@ void initPaging()
 
 void initAPIC()
 {
-	constexpr uint32_t IA32_APIC_BASE_MSR = 0x1B;
-	constexpr uintptr_t LAPIC_SVR_OFFSET = 0xF0;
+	Renderer::printf("\x1b[36mChecking LAPIC status... ");
 
-	uint32_t apicLow, apicHigh;
-	asm volatile ("rdmsr" : "=a"(apicLow), "=d"(apicHigh) : "c"(IA32_APIC_BASE_MSR));
+	uint32_t low, high;
+	asm volatile ("rdmsr" : "=a"(low), "=d"(high) : "c"(0x1B));
 
-	uint64_t base = (static_cast<uint64_t>(apicHigh) << 32) | apicLow;
-	base |= (1ULL << 11);
-	base = (base & ~(0xFFFFFULL << 12)) | (SMP::LAPIC_BASE & 0xFFFFF000ULL);
-	asm volatile ("wrmsr" :: "c"(IA32_APIC_BASE_MSR), "a"(static_cast<uint32_t>(base & 0xFFFFFFFF)), "d"(static_cast<
-		uint32_t>(base >> 32)));
+	uint64_t apicBase = (static_cast<uint64_t>(high) << 32) | low;;
+	bool apic = apicBase & (1ULL << 11);
+	bool x2apic = apicBase & (1ULL << 10);
 
-	volatile uint32_t* svr = reinterpret_cast<uint32_t*>(SMP::LAPIC_BASE + LAPIC_SVR_OFFSET);
-	uint32_t val = *svr;
-	val |= 1 << 8;
-	val = (val & 0xFFFFFF00) | 0xFF;
-	*svr = val;
+	if (apic)
+	{
+		Renderer::printf("\x1b[32mEnabled\x1b[0m");
+		if (x2apic) Renderer::printf(" \x1b[90m(x2APIC)\x1b[0m");
+		Renderer::printf("\n");
+	} else Renderer::printf("\x1b[31mDisabled\x1b[0m\n");
 }
 
 extern "C" [[noreturn]] void kernelMain()
