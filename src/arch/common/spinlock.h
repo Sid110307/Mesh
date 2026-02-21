@@ -5,22 +5,22 @@
 class Spinlock
 {
 public:
-	Spinlock();
+    Spinlock();
 
-	void lock();
-	void unlock();
-	bool tryLock();
-	bool isLocked() const;
+    void lock();
+    void unlock();
+    bool tryLock();
+    [[nodiscard]] bool isLocked() const;
 
 private:
-	volatile uint32_t locked;
+    volatile uint8_t locked;
 };
 
 class LockGuard
 {
 public:
-	explicit LockGuard(Spinlock& l);
-	~LockGuard();
+    explicit LockGuard(Spinlock& l);
+    ~LockGuard();
 
-	Spinlock& lock;
+    Spinlock& lock;
 };

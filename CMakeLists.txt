@@ -58,13 +58,13 @@ foreach (asset ${EMBED_ASSETS})
     set(obj_file "${CMAKE_BINARY_DIR}/${symbol_base}.o")
 
     add_custom_command(
-            OUTPUT ${obj_file}
-            COMMAND ${OBJCOPY_EXECUTABLE} -I binary -O elf64-x86-64 -B i386 ${asset} ${obj_file}
-            COMMAND ${OBJCOPY_EXECUTABLE} --redefine-sym _binary_${orig}_start=${symbol_base}_start ${obj_file}
-            COMMAND ${OBJCOPY_EXECUTABLE} --redefine-sym _binary_${orig}_end=${symbol_base}_end ${obj_file}
-            COMMAND ${OBJCOPY_EXECUTABLE} --redefine-sym _binary_${orig}_size=${symbol_base}_size ${obj_file}
-            DEPENDS ${asset}
-            COMMENT "📦 Embedding asset ${rel_path}"
+        OUTPUT ${obj_file}
+        COMMAND ${OBJCOPY_EXECUTABLE} -I binary -O elf64-x86-64 -B i386 ${asset} ${obj_file}
+        COMMAND ${OBJCOPY_EXECUTABLE} --redefine-sym _binary_${orig}_start=${symbol_base}_start ${obj_file}
+        COMMAND ${OBJCOPY_EXECUTABLE} --redefine-sym _binary_${orig}_end=${symbol_base}_end ${obj_file}
+        COMMAND ${OBJCOPY_EXECUTABLE} --redefine-sym _binary_${orig}_size=${symbol_base}_size ${obj_file}
+        DEPENDS ${asset}
+        COMMENT "📦 Embedding asset ${rel_path}"
     )
     list(APPEND EMBED_ASSET_OBJS ${obj_file})
 endforeach ()
@@ -75,20 +75,20 @@ add_dependencies(mesh.elf embedded_assets)
 set_source_files_properties(src/arch/x86_64/isr.cpp PROPERTIES COMPILE_FLAGS "-mno-sse -mno-sse2 -mno-mmx -mno-80387")
 
 add_custom_command(
-        OUTPUT ${OUT_DIR}/Mesh.iso
-        COMMAND ${CMAKE_COMMAND} -E make_directory ${ISO_ROOT}/boot/limine
-        COMMAND ${CMAKE_COMMAND} -E copy ${OUT_DIR}/mesh.elf ${ISO_ROOT}
-        COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_SOURCE_DIR}/lib/limine.conf ${ISO_ROOT}/boot/limine/limine.conf
-        COMMAND ${CMAKE_COMMAND} -E copy ${LIMINE_ROOT}/limine-bios.sys ${LIMINE_ROOT}/limine-bios-cd.bin ${LIMINE_ROOT}/limine-uefi-cd.bin ${ISO_ROOT}/boot/limine
-        COMMAND ${XORRISO_EXECUTABLE} -as mkisofs -b boot/limine/limine-bios-cd.bin -no-emul-boot -boot-load-size 4 -boot-info-table --efi-boot boot/limine/limine-uefi-cd.bin -efi-boot-part --efi-boot-image --protective-msdos-label ${ISO_ROOT} -o ${OUT_DIR}/Mesh.iso >/dev/null 2>&1
-        COMMAND ${LIMINE_EXECUTABLE} bios-install ${OUT_DIR}/Mesh.iso >/dev/null 2>&1
-        DEPENDS mesh.elf
-        COMMENT "📀 Creating bootable ISO"
+    OUTPUT ${OUT_DIR}/Mesh.iso
+    COMMAND ${CMAKE_COMMAND} -E make_directory ${ISO_ROOT}/boot/limine
+    COMMAND ${CMAKE_COMMAND} -E copy ${OUT_DIR}/mesh.elf ${ISO_ROOT}
+    COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_SOURCE_DIR}/lib/limine.conf ${ISO_ROOT}/boot/limine/limine.conf
+    COMMAND ${CMAKE_COMMAND} -E copy ${LIMINE_ROOT}/limine-bios.sys ${LIMINE_ROOT}/limine-bios-cd.bin ${LIMINE_ROOT}/limine-uefi-cd.bin ${ISO_ROOT}/boot/limine
+    COMMAND ${XORRISO_EXECUTABLE} -as mkisofs -b boot/limine/limine-bios-cd.bin -no-emul-boot -boot-load-size 4 -boot-info-table --efi-boot boot/limine/limine-uefi-cd.bin -efi-boot-part --efi-boot-image --protective-msdos-label ${ISO_ROOT} -o ${OUT_DIR}/Mesh.iso >/dev/null 2>&1
+    COMMAND ${LIMINE_EXECUTABLE} bios-install ${OUT_DIR}/Mesh.iso >/dev/null 2>&1
+    DEPENDS mesh.elf
+    COMMENT "📀 Creating bootable ISO"
 )
 add_custom_target(iso ALL DEPENDS ${OUT_DIR}/Mesh.iso)
 add_custom_target(run
-        COMMAND ${QEMU_EXECUTABLE} -s -no-reboot -m 512M #[[-smp 4]] -cdrom ${OUT_DIR}/Mesh.iso -serial mon:stdio
-        DEPENDS iso
-        WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
-        COMMENT "🚀 Running Mesh in QEMU"
+    COMMAND ${QEMU_EXECUTABLE} -s -no-reboot -m 512M #[[-smp 4]] -cdrom ${OUT_DIR}/Mesh.iso -serial mon:stdio
+    DEPENDS iso
+    WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+    COMMENT "🚀 Running Mesh in QEMU"
 )
