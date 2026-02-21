@@ -29,9 +29,8 @@ void dumpStats()
         Renderer::printf("\x1b[36m[Framebuffer] Supported Video Modes:\n");
         for (size_t i = 0; i < framebuffer_request.response->framebuffer_count; ++i)
         {
-            auto fb = framebuffer_request.response->framebuffers[i];
-            Renderer::printf(" \x1b[90m-\x1b[0m %ux%u @ %u bpp\x1b[0m\n",
-                             fb->width, fb->height, fb->bpp);
+            const auto fb = framebuffer_request.response->framebuffers[i];
+            Renderer::printf(" \x1b[90m-\x1b[0m %ux%u @ %u bpp\x1b[0m\n", fb->width, fb->height, fb->bpp);
         }
     }
     if (memory_request.response)
@@ -43,7 +42,7 @@ void dumpStats()
             "\x1b[36m[Kernel Range]\n \x1b[90m-\x1b[0m Physical: 0x%lx\n \x1b[90m-\x1b[0m Virtual: 0x%lx\n",
             kernel_addr_request.response->physical_base, kernel_addr_request.response->virtual_base);
     if (boot_time_request.response)
-        Renderer::printf("\x1b[36m[Boot Time] \x1b[96m%lu\x1b[0m ms\n", boot_time_request.response->boot_time);
+        Renderer::printf("\x1b[36m[Boot Time] \x1b[96m%lu\x1b[0m\n", boot_time_request.response->boot_time);
     if (smp_request.response && smp_request.response->cpu_count > 0)
         Renderer::printf("\x1b[36m[SMP] \x1b[96m%u CPUs Detected\x1b[0m\n", smp_request.response->cpu_count);
 }
@@ -51,11 +50,11 @@ void dumpStats()
 void initGDT()
 {
     Renderer::printf("\x1b[36mInitializing GDT... ");
-    static uint8_t kernelStack[SMP::SMP_STACK_SIZE] __attribute__((aligned(16)));
 
     [[maybe_unused]] GDTManager gdtManager;
     GDTManager::load();
-    GDTManager::setTSS(0, reinterpret_cast<uint64_t>(&kernelStack[SMP::SMP_STACK_SIZE]));
+    GDTManager::setTSS(0, SMP::getKernelStackTop(0));
+    GDTManager::loadTR(0);
 
     Renderer::printf("\x1b[32mDone!\n");
 }
@@ -64,6 +63,7 @@ void initIDT()
 {
     Renderer::printf("\x1b[36mInitializing IDT... ");
     IDTManager::init();
+    IDTManager::load();
     Renderer::printf("\x1b[32mDone!\n");
 }
 

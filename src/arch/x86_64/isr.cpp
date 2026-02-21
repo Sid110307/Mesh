@@ -102,15 +102,15 @@ static void showException(InterruptFrame* frame, uint64_t intNum, uint64_t error
                 break;
             }
 
-            Renderer::printf("Error: Segment fault.\nIndex = %lu, Table = %s\n", errorCode >> 3, table);
+            Renderer::printf("Error: General protection fault.\nIndex = %lu, Table = %s\n", errorCode >> 3, table);
             break;
         }
     case 14:
         {
             uint64_t faultAddr;
             asm volatile ("mov %%cr2, %0" : "=r"(faultAddr));
-            Renderer::printf("Error: Page fault.\nAddress: 0x%lx\nError Code: 0x%lx (%lu)\nPage Fault Details:\n",
-                             faultAddr, errorCode, errorCode);
+            Renderer::printf("Error: Page fault.\nAddress: 0x%lx\nError Code: 0x%lx (%lu)\nDetails:\n", faultAddr,
+                             errorCode, errorCode);
 
             if (!(errorCode & 1)) Renderer::printf("- Page not present\n");
             if (errorCode & 2) Renderer::printf("- Write operation\n");
@@ -123,56 +123,50 @@ static void showException(InterruptFrame* frame, uint64_t intNum, uint64_t error
 
             break;
         }
-    case 15:
     case 16:
-        {
-            Renderer::printf("Error: Reserved exception.\n");
-            if (errorCode) Renderer::printf("Error Code: 0x%lx (%lu)\n", errorCode, errorCode);
-
-            break;
-        }
-    case 17:
         {
             Renderer::printf("Error: Floating-point error.\n");
             if (errorCode) Renderer::printf("Error Code: 0x%lx (%lu)\n", errorCode, errorCode);
 
             break;
         }
-    case 18:
+    case 17:
         {
             Renderer::printf("Error: Alignment check.\n");
             if (errorCode) Renderer::printf("Error Code: 0x%lx (%lu)\n", errorCode, errorCode);
 
             break;
         }
-    case 19:
+    case 18:
         {
             Renderer::printf("Error: Machine check.\n");
             if (errorCode) Renderer::printf("Error Code: 0x%lx (%lu)\n", errorCode, errorCode);
 
             break;
         }
-    case 20:
+    case 19:
         {
             Renderer::printf("Error: SIMD floating-point exception.\n");
             if (errorCode) Renderer::printf("Error Code: 0x%lx (%lu)\n", errorCode, errorCode);
 
             break;
         }
-    case 21:
+    case 20:
         {
             Renderer::printf("Error: Virtualization exception.\n");
             if (errorCode) Renderer::printf("Error Code: 0x%lx (%lu)\n", errorCode, errorCode);
 
             break;
         }
-    case 22:
+    case 21:
         {
             Renderer::printf("Error: Control protection exception.\n");
             if (errorCode) Renderer::printf("Error Code: 0x%lx (%lu)\n", errorCode, errorCode);
 
             break;
         }
+    case 15:
+    case 22:
     case 23:
     case 24:
     case 25:
@@ -197,16 +191,16 @@ static void showException(InterruptFrame* frame, uint64_t intNum, uint64_t error
         }
     }
 
-    Renderer::printf("RIP: 0x%lx\nCS: 0x%lx\nRSP: 0x%lx\nSS: 0x%lx\nRFLAGS: 0x%lx\n", frame->rip, frame->cs, frame->rsp,
-                     frame->ss, frame->rflags);
+    Renderer::printf("RIP: 0x%lx\nCS: 0x%lx\nRFLAGS: 0x%lx\nSS: 0x%lx\nRSP: 0x%lx\n", frame->rip, frame->cs,
+                     frame->rflags, frame->ss, frame->rsp);
     Renderer::setSerialPrint(false);
     Renderer::printf("\x1b[0mSystem Halted.\n");
 
     while (true) asm volatile ("hlt");
 }
 
-#define ISR_NOERR(n) __attribute__((interrupt)) void isr##n(InterruptFrame* frame) { showException(frame, n, 0); }
-#define ISR_ERR(n) __attribute__((interrupt)) void isr##n(InterruptFrame* frame, uint64_t error) { showException(frame, n, error); }
+#define ISR_NOERR(n) extern "C" __attribute__((interrupt)) void isr##n(InterruptFrame* frame) { showException(frame, n, 0); }
+#define ISR_ERR(n) extern "C" __attribute__((interrupt)) void isr##n(InterruptFrame* frame, uint64_t error) { showException(frame, n, error); }
 
 ISR_NOERR(0)
 ISR_NOERR(1)

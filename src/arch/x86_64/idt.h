@@ -20,5 +20,6 @@ class IDTManager
 {
 public:
     static void init();
+    static void load();
     static void setEntry(uint8_t vector, void (*isr)(), uint8_t flags = 0x8E, uint8_t ist = 0);
 };

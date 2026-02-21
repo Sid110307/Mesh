@@ -6,7 +6,8 @@ section .text
 
 trampoline:
     cli
-    mov rsp, rdi
+    mov rsp, [rdi + 0]
+    mov edi, [rdi + 8]
     call apMain
 .hang:
     hlt

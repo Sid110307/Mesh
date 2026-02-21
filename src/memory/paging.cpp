@@ -102,12 +102,6 @@ void Paging::init()
             while (true) asm volatile ("hlt");
         }
 
-    if (!mapSmall(SMP::LAPIC_BASE, SMP::LAPIC_BASE, PageFlags::PRESENT | PageFlags::RW))
-    {
-        Serial::printf("Failed to map LAPIC page at 0x%lx.\n", SMP::LAPIC_BASE);
-        while (true) asm volatile ("hlt");
-    }
-
     uint64_t pml4Phys = reinterpret_cast<uint64_t>(pml4) - hhdm_request.response->offset;
     if (!mapSmall(reinterpret_cast<uint64_t>(pml4), pml4Phys, PageFlags::PRESENT | PageFlags::RW))
     {
@@ -383,7 +377,9 @@ void FrameAllocator::init()
     totalFrames = memorySize / SMALL_SIZE;
     usedFrames = 0;
 
-    for (uint64_t i = 0; i < bitmapPages; ++i) reserve(reinterpret_cast<void*>(bitmapPhys + i * SMALL_SIZE));
+    for (uint64_t i = 0; i < bitmapPages; ++i)
+        reserve(
+            reinterpret_cast<void*>(hhdm_request.response->offset + bitmapPhys + i * SMALL_SIZE));
 }
 
 void* FrameAllocator::alloc()

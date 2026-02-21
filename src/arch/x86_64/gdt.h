@@ -27,6 +27,7 @@ public:
     GDTManager();
     static void load();
     static void setTSS(size_t cpuIndex, uint64_t rsp0);
+    static void loadTR(size_t cpuIndex);
 
 private:
     static void setEntry(uint16_t index, uint32_t base, uint32_t limit, uint8_t access, uint8_t flags);
