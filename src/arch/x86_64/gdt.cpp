@@ -30,7 +30,8 @@ GDTManager::GDTManager()
 
 void GDTManager::load()
 {
-    uint32_t dataSel = GDT_DATA << 3, codeSel = GDT_CODE << 3;
+    uint16_t dataSel = GDT_DATA << 3;
+    uint32_t codeSel = GDT_CODE << 3;
 
     asm volatile ("lgdt %0" :: "m"(gdtPointer) : "memory");
     asm volatile ("mov %[sel], %%ax\nmov %%ax, %%ds\nmov %%ax, %%es\nmov %%ax, %%fs\nmov %%ax, %%gs\nmov %%ax, %%ss\n"
@@ -39,24 +40,26 @@ void GDTManager::load()
         "rax", "memory");
 }
 
-void GDTManager::setTSS(size_t cpuIndex, uint64_t rsp0)
+void GDTManager::setTSS(const size_t cpuIndex, const uint64_t rsp0)
 {
     memset(&kernelTSS[cpuIndex], 0, sizeof(TSS));
     kernelTSS[cpuIndex].rsp[0] = rsp0;
     kernelTSS[cpuIndex].ioMapBase = sizeof(TSS);
-
     for (int i = 0; i < 7; ++i)
         kernelTSS[cpuIndex].ist[i] = reinterpret_cast<uint64_t>(&istStacks[cpuIndex][i]) + sizeof(istStacks[cpuIndex][
             i]);
-    auto base = reinterpret_cast<uint64_t>(&kernelTSS[cpuIndex]);
-    uint32_t limit = sizeof(TSS) - 1;
 
-    size_t gdtIndex = GDT_TSS + cpuIndex * 2;
-    setEntry(gdtIndex, base & 0xFFFFFFFF, limit, 0x89, 0x00);
+    const auto base = reinterpret_cast<uint64_t>(&kernelTSS[cpuIndex]);
+    const size_t gdtIndex = GDT_TSS + cpuIndex * 2;
+    setEntry(gdtIndex, base & 0xFFFFFFFF, sizeof(TSS) - 1, 0x89, 0x00);
 
     *reinterpret_cast<uint32_t*>(&gdt[gdtIndex + 1]) = (base >> 32) & 0xFFFFFFFF;
     *(reinterpret_cast<uint32_t*>(&gdt[gdtIndex + 1]) + 1) = 0;
-    asm volatile("ltr %0" :: "r"(static_cast<uint16_t>(gdtIndex << 3)));
+}
+
+void GDTManager::loadTR(size_t cpuIndex)
+{
+    asm volatile ("ltr %0" :: "r"(static_cast<uint16_t>((GDT_TSS + cpuIndex * 2) << 3)) : "memory");
 }
 
 void GDTManager::setEntry(const uint16_t index, const uint32_t base, const uint32_t limit, const uint8_t access,

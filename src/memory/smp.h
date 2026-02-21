@@ -4,12 +4,17 @@
 #include <arch/common/spinlock.h>
 #include <core/utils.h>
 
+struct ApBootInfo
+{
+    uint64_t stackTop;
+    uint32_t cpuID;
+};
+
 class SMP
 {
 public:
     static void init();
     static uint32_t getCpuCount();
-    static uint32_t getCpuID();
     static uint32_t getLapicID();
 
     static constexpr size_t MAX_CPUS = 256, SMP_STACK_SIZE = 8192;
@@ -20,4 +25,5 @@ public:
 private:
     static void waitForAPs();
     static Spinlock smpLock;
+    static uint64_t lapicPhysBase, lapicVirtBase;
 };

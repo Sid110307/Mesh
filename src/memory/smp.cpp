@@ -14,17 +14,22 @@ Spinlock SMP::smpLock;
 
 alignas(4096) static uint8_t kernelStacks[SMP::MAX_CPUS][SMP::SMP_STACK_SIZE];
 alignas(4096) static uint8_t apStacks[SMP::MAX_CPUS][SMP::SMP_STACK_SIZE];
+static ApBootInfo apBoot[SMP::MAX_CPUS] = {};
 static uint32_t lapicIDs[SMP::MAX_CPUS] = {};
 static uint32_t apCount = 0;
 
 Atomic SMP::apReadyCount{0};
-uint32_t SMP::cpuCount = 0;
-uint32_t cpuIDs[SMP::MAX_CPUS] = {};
+uint32_t SMP::cpuCount = 0, cpuIDs[SMP::MAX_CPUS] = {};
+uint64_t SMP::lapicPhysBase = 0, SMP::lapicVirtBase = 0;
 
-extern "C" [[noreturn]] void apMain()
+extern "C" [[noreturn]] void apMain(uint32_t cpuID)
 {
+    GDTManager::load();
+    IDTManager::load();
+    GDTManager::loadTR(cpuID);
+
     SMP::apReadyCount.increment();
-    Renderer::printf("\x1b[33m[AP] Core %u online!\x1b[0m\n", SMP::getCpuID());
+    Renderer::printf("\x1b[33m[AP] Core %u online!\x1b[0m\n", cpuID);
 
     asm volatile ("sti");
     while (true) asm volatile ("hlt");
@@ -39,19 +44,19 @@ void SMP::init()
 
     uint32_t low, high;
     asm volatile("rdmsr" : "=a"(low), "=d"(high) : "c"(0x1B));
-    uint64_t lapicPhysBase = (static_cast<uint64_t>(high) << 32) | low;
+    lapicPhysBase = (static_cast<uint64_t>(high) << 32) | low;
     lapicPhysBase &= 0xFFFFF000;
 
-    uint64_t lapicVirtBase = lapicPhysBase + hhdm_request.response->offset;
+    lapicVirtBase = lapicPhysBase + hhdm_request.response->offset;
     if (!Paging::mapSmall(lapicVirtBase, lapicPhysBase, PageFlags::PRESENT | PageFlags::RW))
     {
         Renderer::printf("\x1b[31m[SMP] Failed to map LAPIC MMIO!\x1b[0m\n");
         return;
     }
 
-    const uint64_t trampolineVirt = reinterpret_cast<uint64_t>(&trampoline);
-    const uint64_t trampolinePhys = trampolineVirt -
-        kernel_addr_request.response->virtual_base + kernel_addr_request.response->physical_base;
+    const auto trampolineVirt = reinterpret_cast<uint64_t>(&trampoline);
+    const uint64_t trampolinePhys = trampolineVirt - kernel_addr_request.response->virtual_base +
+        kernel_addr_request.response->physical_base;
 
     if (!Paging::mapSmall(trampolineVirt, trampolinePhys, PageFlags::PRESENT | PageFlags::RW))
     {
@@ -80,7 +85,7 @@ void SMP::init()
 
         if (!isBSP)
         {
-            const uint64_t stackVirt = reinterpret_cast<uint64_t>(&apStacks[logicalID][0]);
+            const auto stackVirt = reinterpret_cast<uint64_t>(&apStacks[logicalID][0]);
             const uint64_t stackPhys = stackVirt -
                 kernel_addr_request.response->virtual_base + kernel_addr_request.response->physical_base;
 
@@ -95,7 +100,10 @@ void SMP::init()
                         return;
                     }
 
-            cpu->extra_argument = (stackVirt + SMP_STACK_SIZE) & ~0xFULL;
+            apBoot[logicalID].stackTop = (stackVirt + SMP_STACK_SIZE) & ~0xFULL;
+            apBoot[logicalID].cpuID = logicalID;
+
+            cpu->extra_argument = reinterpret_cast<uint64_t>(&apBoot[logicalID]);
             cpu->goto_address = reinterpret_cast<uint8_t*>(trampolineVirt);
 
             Renderer::printf("\x1b[33m[AP] Queued core (LAPIC ID %u) as CPU ID %u\x1b[0m\n", cpu->lapic_id, logicalID);
@@ -111,24 +119,21 @@ void SMP::init()
 
 uint32_t SMP::getCpuCount() { return cpuCount; }
 
-uint32_t SMP::getCpuID()
-{
-    const uint32_t lapic = getLapicID();
-    for (uint32_t i = 0; i < cpuCount; ++i) if (lapicIDs[i] == lapic) return i;
-
-    Renderer::printf("[SMP] Failed to find LAPIC ID %u in CPU list!\n", lapic);
-    Renderer::printf("[SMP] Available LAPIC IDs: ");
-    for (uint32_t i = 0; i < cpuCount; ++i) Renderer::printf("%u ", lapicIDs[i]);
-    Renderer::printf("\n");
-
-    while (true) asm volatile ("hlt");
-}
-
 uint32_t SMP::getLapicID()
 {
     uint32_t low, high;
-    asm volatile("rdmsr" : "=a"(low), "=d"(high) : "c"(0x802));
-    return (low >> 24) & 0xFF;
+    asm volatile("rdmsr" : "=a"(low), "=d"(high) : "c"(0x1B));
+
+    if (((static_cast<uint64_t>(high) << 32) | low) & (1ULL << 10))
+    {
+        uint32_t idLow, idHigh;
+        asm volatile("rdmsr" : "=a"(idLow), "=d"(idHigh) : "c"(0x802));
+
+        return idLow;
+    }
+
+    auto lapic = reinterpret_cast<volatile uint32_t*>(lapicVirtBase);
+    return lapic[0x20 / 4] >> 24;
 }
 
 void SMP::waitForAPs()
