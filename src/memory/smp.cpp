@@ -6,8 +6,8 @@
 #include <kernel/boot/limine.h>
 
 extern limine_hhdm_request hhdm_request;
-extern limine_kernel_address_request kernel_addr_request;
-extern limine_smp_request smp_request;
+extern limine_executable_address_request executable_addr_request;
+extern limine_mp_request mp_request;
 
 extern "C" void trampoline();
 Spinlock SMP::smpLock;
@@ -36,15 +36,17 @@ void SMP::init()
 {
     LockGuard guard(smpLock);
 
-    if (!smp_request.response || smp_request.response->cpu_count == 0) return;
-    cpuCount = smp_request.response->cpu_count;
+    if (!mp_request.response || mp_request.response->cpu_count == 0) return;
+    cpuCount = mp_request.response->cpu_count;
 
     uint32_t low, high;
     asm volatile ("rdmsr" : "=a"(low), "=d"(high) : "c"(0x1B));
     lapicPhysBase = (static_cast<uint64_t>(high) << 32 | low) & 0xFFFFF000;
     lapicVirtBase = lapicPhysBase + hhdm_request.response->offset;
 
-    if (!Paging::mapSmall(lapicVirtBase, lapicPhysBase, PageFlags::PRESENT | PageFlags::RW))
+    if (!Paging::mapSmall(lapicVirtBase, lapicPhysBase,
+                          PageFlags::PRESENT | PageFlags::RW | PageFlags::CACHE_DISABLE | PageFlags::WRITE_THROUGH |
+                          PageFlags::GLOBAL | PageFlags::NO_EXECUTE))
     {
         Renderer::printf("\x1b[31m[SMP] Failed to map LAPIC MMIO!\x1b[0m\n");
         return;
@@ -55,10 +57,10 @@ void SMP::init()
 
     for (uint32_t i = 0; i < cpuCount; ++i)
     {
-        auto* cpu = smp_request.response->cpus[i];
+        auto* cpu = mp_request.response->cpus[i];
         if (!cpu) continue;
 
-        const bool isBSP = cpu->lapic_id == smp_request.response->bsp_lapic_id;
+        const bool isBSP = cpu->lapic_id == mp_request.response->bsp_lapic_id;
         if (!isBSP && logicalID >= MAX_CPUS)
         {
             Renderer::printf("\x1b[31m[SMP] Too many CPUs! Ignoring LAPIC ID %u\x1b[0m\n", cpu->lapic_id);

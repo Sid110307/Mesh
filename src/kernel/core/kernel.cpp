@@ -11,11 +11,11 @@
 #include <kernel/boot/limine.h>
 
 extern limine_framebuffer_request framebuffer_request;
-extern limine_memmap_request memory_request;
+extern limine_memmap_request memmap_request;
 extern limine_hhdm_request hhdm_request;
-extern limine_kernel_address_request kernel_addr_request;
-extern limine_smp_request smp_request;
-extern limine_boot_time_request boot_time_request;
+extern limine_executable_address_request executable_addr_request;
+extern limine_mp_request mp_request;
+extern limine_date_at_boot_request date_at_boot_request;
 
 void initSSE()
 {
@@ -54,18 +54,18 @@ void dumpStats()
             Renderer::printf(" \x1b[90m-\x1b[0m %ux%u @ %u bpp\x1b[0m\n", fb->width, fb->height, fb->bpp);
         }
     }
-    if (memory_request.response)
-        Renderer::printf("\x1b[36m[Memory Map] \x1b[96m%u entries\x1b[0m\n", memory_request.response->entry_count);
+    if (memmap_request.response)
+        Renderer::printf("\x1b[36m[Memory Map] \x1b[96m%u entries\x1b[0m\n", memmap_request.response->entry_count);
     if (hhdm_request.response)
         Renderer::printf("\x1b[36m[HHDM Base] \x1b[96m0x%lx\x1b[0m\n", hhdm_request.response->offset);
-    if (kernel_addr_request.response)
+    if (executable_addr_request.response)
         Renderer::printf(
             "\x1b[36m[Kernel Range]\n \x1b[90m-\x1b[0m Physical: 0x%lx\n \x1b[90m-\x1b[0m Virtual: 0x%lx\n",
-            kernel_addr_request.response->physical_base, kernel_addr_request.response->virtual_base);
-    if (boot_time_request.response)
-        Renderer::printf("\x1b[36m[Boot Time] \x1b[96m%lu\x1b[0m\n", boot_time_request.response->boot_time);
-    if (smp_request.response && smp_request.response->cpu_count > 0)
-        Renderer::printf("\x1b[36m[SMP] \x1b[96m%u CPUs Detected\x1b[0m\n", smp_request.response->cpu_count);
+            executable_addr_request.response->physical_base, executable_addr_request.response->virtual_base);
+    if (date_at_boot_request.response)
+        Renderer::printf("\x1b[36m[Boot Time] \x1b[96m%lu\x1b[0m\n", date_at_boot_request.response->timestamp);
+    if (mp_request.response && mp_request.response->cpu_count > 0)
+        Renderer::printf("\x1b[36m[SMP] \x1b[96m%u CPUs Detected\x1b[0m\n", mp_request.response->cpu_count);
 }
 
 void initGDT()
@@ -129,7 +129,9 @@ void initIOAPIC()
     }
 
     const uint64_t ioapicVirt = madt.ioapicPhys + hhdm_request.response->offset;
-    if (!Paging::mapSmall(ioapicVirt, madt.ioapicPhys, PageFlags::PRESENT | PageFlags::RW))
+    if (!Paging::mapSmall(ioapicVirt, madt.ioapicPhys,
+                          PageFlags::PRESENT | PageFlags::RW | PageFlags::CACHE_DISABLE | PageFlags::WRITE_THROUGH |
+                          PageFlags::GLOBAL | PageFlags::NO_EXECUTE))
     {
         Renderer::printf("\x1b[31mFailed to map IOAPIC MMIO\x1b[0m\n");
         return;
@@ -137,7 +139,7 @@ void initIOAPIC()
 
     IOAPIC::init(ioapicVirt, madt.ioapicGlobalIrqBase);
     IOAPIC::redirect(madt.hasIso ? madt.irq1GlobalIrqBase : 1, 0x21,
-                     static_cast<uint8_t>(smp_request.response->bsp_lapic_id), madt.irq1ActiveLow,
+                     static_cast<uint8_t>(mp_request.response->bsp_lapic_id), madt.irq1ActiveLow,
                      madt.irq1LevelTriggered);
 
     Renderer::printf("\x1b[32mDone!\x1b[0m\n");

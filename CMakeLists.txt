@@ -72,6 +72,7 @@ endforeach ()
 add_custom_target(embedded_assets ALL DEPENDS ${EMBED_ASSET_OBJS})
 add_executable(mesh.elf ${ASM_NASM_SRC} ${C_SRC} ${CPP_SRC} ${EMBED_ASSET_OBJS})
 add_dependencies(mesh.elf embedded_assets)
+target_compile_definitions(mesh.elf PRIVATE LIMINE_API_REVISION=3)
 
 add_custom_command(
     OUTPUT ${OUT_DIR}/Mesh.iso

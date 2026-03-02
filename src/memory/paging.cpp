@@ -4,9 +4,9 @@
 #include <kernel/boot/limine.h>
 
 extern limine_framebuffer_request framebuffer_request;
-extern limine_memmap_request memory_request;
+extern limine_memmap_request memmap_request;
 extern limine_hhdm_request hhdm_request;
-extern limine_kernel_address_request kernel_addr_request;
+extern limine_executable_address_request executable_addr_request;
 extern uint8_t _kernel_start[], _kernel_end[];
 
 Spinlock Paging::pagingLock;
@@ -30,14 +30,15 @@ static uint64_t* createPageTable()
     return address;
 }
 
-static uint64_t* ensureTable(uint64_t* parent, const uint16_t index,
-                             const PageFlags flags = PageFlags::PRESENT | PageFlags::RW)
+static uint64_t* ensureTable(uint64_t* parent, const uint16_t index, const PageFlags flags)
 {
     if (parent[index] & static_cast<uint64_t>(PageFlags::HUGE))
     {
         Serial::printf("Paging: Cannot ensure table at index %u because parent entry is a huge page.\n", index);
         return nullptr;
     }
+    const uint64_t want = static_cast<uint64_t>(PageFlags::PRESENT) | (static_cast<uint64_t>(flags) & (static_cast<
+        uint64_t>(PageFlags::RW) | static_cast<uint64_t>(PageFlags::USER)));
 
     if (!(parent[index] & static_cast<uint64_t>(PageFlags::PRESENT)))
     {
@@ -45,9 +46,24 @@ static uint64_t* ensureTable(uint64_t* parent, const uint16_t index,
         if (!newTable) return nullptr;
 
         const uint64_t phys = reinterpret_cast<uint64_t>(newTable) - hhdm_request.response->offset;
-        parent[index] = phys | static_cast<uint64_t>(flags);
+        parent[index] = phys | (static_cast<uint64_t>(PageFlags::PRESENT) | (static_cast<uint64_t>(flags) & (static_cast
+            <uint64_t>(PageFlags::RW) | static_cast<uint64_t>(PageFlags::USER))));
     }
+    else parent[index] |= want & (static_cast<uint64_t>(PageFlags::RW) | static_cast<uint64_t>(PageFlags::USER));
+
     return reinterpret_cast<uint64_t*>(hhdm_request.response->offset + (parent[index] & ~0xFFFULL));
+}
+
+static bool tableEmpty(const uint64_t* table)
+{
+    for (int i = 0; i < 512; ++i) if (table[i] & static_cast<uint64_t>(PageFlags::PRESENT)) return false;
+    return true;
+}
+
+static void freeTable(uint64_t* parent, const uint16_t index)
+{
+    FrameAllocator::free(reinterpret_cast<void*>(parent[index] & ~0xFFFULL));
+    parent[index] = 0;
 }
 
 void Paging::init()
@@ -59,8 +75,8 @@ void Paging::init()
         while (true) asm volatile ("hlt");
     }
 
-    uint64_t kernelPhysStart = kernel_addr_request.response->physical_base;
-    uint64_t kernelVirtStart = kernel_addr_request.response->virtual_base;
+    uint64_t kernelPhysStart = executable_addr_request.response->physical_base;
+    uint64_t kernelVirtStart = executable_addr_request.response->virtual_base;
     uint64_t kernelSize = _kernel_end - _kernel_start;
 
     for (uint64_t offset = 0; offset < kernelSize; offset += FrameAllocator::SMALL_SIZE)
@@ -87,7 +103,7 @@ void Paging::init()
         uint64_t fbSize = fb->pitch * fb->height;
 
         for (uint64_t addr = fbBase; addr < fbBase + fbSize; addr += FrameAllocator::SMALL_SIZE)
-            if (!mapSmall(addr, addr, PageFlags::PRESENT | PageFlags::RW))
+            if (!mapSmall(addr, addr, PageFlags::PRESENT | PageFlags::RW | PageFlags::GLOBAL | PageFlags::NO_EXECUTE))
             {
                 Serial::printf("Paging: Failed to map framebuffer page at 0x%lx.\n", addr);
                 while (true) asm volatile ("hlt");
@@ -95,14 +111,15 @@ void Paging::init()
     }
 
     uint64_t maxPhys = 0;
-    for (size_t i = 0; i < memory_request.response->entry_count; ++i)
-        if (auto& entry = memory_request.response->entries[i]; entry->type == LIMINE_MEMMAP_USABLE || entry->type ==
+    for (size_t i = 0; i < memmap_request.response->entry_count; ++i)
+        if (auto& entry = memmap_request.response->entries[i]; entry->type == LIMINE_MEMMAP_USABLE || entry->type ==
             LIMINE_MEMMAP_BOOTLOADER_RECLAIMABLE || entry->type == LIMINE_MEMMAP_ACPI_RECLAIMABLE || entry->type ==
             LIMINE_MEMMAP_FRAMEBUFFER)
             if (uint64_t end = entry->base + entry->length; end > maxPhys) maxPhys = end;
 
     for (uint64_t phys = 0; phys < maxPhys; phys += FrameAllocator::SMALL_SIZE)
-        if (!mapSmall(hhdm_request.response->offset + phys, phys, PageFlags::PRESENT | PageFlags::RW))
+        if (!mapSmall(hhdm_request.response->offset + phys, phys,
+                      PageFlags::PRESENT | PageFlags::RW | PageFlags::GLOBAL | PageFlags::NO_EXECUTE))
         {
             Serial::printf("Paging: Failed to map physical memory page at 0x%lx.\n",
                            phys + hhdm_request.response->offset);
@@ -138,11 +155,11 @@ bool Paging::mapSmall(uint64_t virtualAddress, uint64_t physicalAddress, PageFla
     auto pdIndex = virtualAddress >> 21 & 0x1FF;
     auto ptIndex = virtualAddress >> 12 & 0x1FF;
 
-    uint64_t* pdpt = ensureTable(pml4, pml4Index);
+    uint64_t* pdpt = ensureTable(pml4, pml4Index, flags);
     if (!pdpt) return false;
-    uint64_t* pd = ensureTable(pdpt, pdptIndex);
+    uint64_t* pd = ensureTable(pdpt, pdptIndex, flags);
     if (!pd) return false;
-    uint64_t* pt = ensureTable(pd, pdIndex);
+    uint64_t* pt = ensureTable(pd, pdIndex, flags);
     if (!pt) return false;
 
     pt[ptIndex] = (physicalAddress & ~0xFFFULL) | static_cast<uint64_t>(flags);
@@ -159,9 +176,9 @@ bool Paging::mapMedium(uint64_t virtualAddress, uint64_t physicalAddress, PageFl
     auto pdptIndex = virtualAddress >> 30 & 0x1FF;
     auto pdIndex = virtualAddress >> 21 & 0x1FF;
 
-    uint64_t* pdpt = ensureTable(pml4, pml4Index);
+    uint64_t* pdpt = ensureTable(pml4, pml4Index, flags);
     if (!pdpt) return false;
-    uint64_t* pd = ensureTable(pdpt, pdptIndex);
+    uint64_t* pd = ensureTable(pdpt, pdptIndex, flags);
     if (!pd) return false;
 
     pd[pdIndex] = (physicalAddress & ~0x1FFFFFULL) | static_cast<uint64_t>(flags) | static_cast<uint64_t>(
@@ -178,7 +195,7 @@ bool Paging::mapLarge(uint64_t virtualAddress, uint64_t physicalAddress, PageFla
     auto pml4Index = virtualAddress >> 39 & 0x1FF;
     auto pdptIndex = virtualAddress >> 30 & 0x1FF;
 
-    uint64_t* pdpt = ensureTable(pml4, pml4Index);
+    uint64_t* pdpt = ensureTable(pml4, pml4Index, flags);
     if (!pdpt) return false;
 
     pdpt[pdptIndex] = (physicalAddress & ~0x3FFFFFFFULL) | static_cast<uint64_t>(flags) | static_cast<uint64_t>(
@@ -192,22 +209,31 @@ void Paging::unmapSmall(uint64_t virtualAddress)
 {
     LockGuard guard(pagingLock);
 
-    auto pml4Index = virtualAddress >> 39 & 0x1FF;
-    auto pdptIndex = virtualAddress >> 30 & 0x1FF;
-    auto pdIndex = virtualAddress >> 21 & 0x1FF;
-    auto ptIndex = virtualAddress >> 12 & 0x1FF;
+    auto pml4Index = (virtualAddress >> 39) & 0x1FF;
+    auto pdptIndex = (virtualAddress >> 30) & 0x1FF;
+    auto pdIndex = (virtualAddress >> 21) & 0x1FF;
+    auto ptIndex = (virtualAddress >> 12) & 0x1FF;
 
     if (!(pml4[pml4Index] & static_cast<uint64_t>(PageFlags::PRESENT))) return;
-    auto pdpt = reinterpret_cast<uint64_t*>(hhdm_request.response->offset + (pml4[pml4Index] & ~0xFFFULL));
+    auto* pdpt = reinterpret_cast<uint64_t*>(hhdm_request.response->offset + (pml4[pml4Index] & ~0xFFFULL));
     if (!(pdpt[pdptIndex] & static_cast<uint64_t>(PageFlags::PRESENT))) return;
-    auto pd = reinterpret_cast<uint64_t*>(hhdm_request.response->offset + (pdpt[pdptIndex] & ~0xFFFULL));
+    auto* pd = reinterpret_cast<uint64_t*>(hhdm_request.response->offset + (pdpt[pdptIndex] & ~0xFFFULL));
     if (!(pd[pdIndex] & static_cast<uint64_t>(PageFlags::PRESENT))) return;
-    auto pt = reinterpret_cast<uint64_t*>(hhdm_request.response->offset + (pd[pdIndex] & ~0xFFFULL));
+    auto* pt = reinterpret_cast<uint64_t*>(hhdm_request.response->offset + (pd[pdIndex] & ~0xFFFULL));
     if (!(pt[ptIndex] & static_cast<uint64_t>(PageFlags::PRESENT))) return;
 
     pt[ptIndex] = 0;
     asm volatile ("invlpg (%0)" :: "r"(virtualAddress) : "memory");
-    cleanup(pt, ptIndex, 1, pdptIndex, pdIndex, pd, pdpt);
+
+    if (tableEmpty(pt))
+    {
+        freeTable(pd, static_cast<uint16_t>(pdIndex));
+        if (tableEmpty(pd))
+        {
+            freeTable(pdpt, static_cast<uint16_t>(pdptIndex));
+            if (tableEmpty(pdpt)) freeTable(pml4, static_cast<uint16_t>(pml4Index));
+        }
+    }
 }
 
 void Paging::unmapMedium(uint64_t virtualAddress)
@@ -227,7 +253,12 @@ void Paging::unmapMedium(uint64_t virtualAddress)
     pd[pdIndex] &= ~static_cast<uint64_t>(PageFlags::HUGE);
     pd[pdIndex] = 0;
     asm volatile ("invlpg (%0)" :: "r"(virtualAddress) : "memory");
-    cleanup(pd, pdIndex, 2, pdptIndex, pdIndex, pd, pdpt);
+
+    if (tableEmpty(pd))
+    {
+        freeTable(pdpt, static_cast<uint16_t>(pdptIndex));
+        if (tableEmpty(pdpt)) freeTable(pml4, static_cast<uint16_t>(pml4Index));
+    }
 }
 
 void Paging::unmapLarge(uint64_t virtualAddress)
@@ -244,112 +275,8 @@ void Paging::unmapLarge(uint64_t virtualAddress)
     pdpt[pdptIndex] &= ~static_cast<uint64_t>(PageFlags::HUGE);
     pdpt[pdptIndex] = 0;
     asm volatile ("invlpg (%0)" :: "r"(virtualAddress) : "memory");
-    cleanup(pdpt, pdptIndex, 3, pml4Index, pdptIndex, nullptr, nullptr);
-}
 
-void Paging::cleanup(uint64_t* startTable, const uint16_t startIndex, const int startLevel,
-                     const uint64_t pdptIndex, const uint64_t pdIndex, const uint64_t* pd, const uint64_t* pdpt)
-{
-    uint64_t* currentTable = startTable;
-    uint16_t currentIndex = startIndex;
-    int currentLevel = startLevel;
-
-    while (true)
-    {
-        if (const bool cleaned = cleanupPageTable(currentTable, currentIndex, currentLevel); !cleaned) break;
-        if (currentLevel == 1)
-        {
-            currentTable = reinterpret_cast<uint64_t*>(hhdm_request.response->offset + (pd[currentIndex] & ~0xFFFULL));
-            currentIndex = pdIndex;
-            currentLevel = 2;
-        }
-        else if (currentLevel == 2)
-        {
-            currentTable = reinterpret_cast<uint64_t*>(hhdm_request.response->offset + (pdpt[currentIndex] & ~
-                0xFFFULL));
-            currentIndex = pdptIndex;
-            currentLevel = 3;
-        }
-        else if (currentLevel == 3)
-        {
-            if (pml4[currentIndex] != 0) pml4[currentIndex] = 0;
-            break;
-        }
-        else break;
-    }
-}
-
-bool Paging::cleanupPageTable(uint64_t* rootTable, uint16_t rootIndex, int rootLevel)
-{
-    struct CleanupState
-    {
-        uint64_t* parent;
-        uint16_t index;
-        uint64_t* table;
-        int level;
-    };
-
-    CleanupState stack[4];
-    int stackPtr = 0;
-    stack[stackPtr++] = {rootTable, rootIndex, nullptr, rootLevel};
-
-    while (stackPtr > 0)
-    {
-        auto& [parent, index, table, level] = stack[stackPtr - 1];
-
-        if (!table)
-        {
-            table = parent && level >= 2 && level <= 4
-                        ? reinterpret_cast<uint64_t*>(hhdm_request.response->offset + (parent[index] & ~0xFFFULL))
-                        : nullptr;
-            if (!table)
-            {
-                stackPtr--;
-                continue;
-            }
-        }
-
-        bool empty = true;
-        for (int i = 0; i < 512; ++i)
-            if (table[i] & static_cast<uint64_t>(PageFlags::PRESENT))
-            {
-                empty = false;
-                break;
-            }
-
-        if (!empty)
-        {
-            stackPtr--;
-            continue;
-        }
-
-        FrameAllocator::free(table);
-        if (parent) parent[index] = 0;
-
-        uint64_t virtBase = 0;
-        switch (level)
-        {
-            case 1:
-                break;
-            case 2:
-                virtBase = index * 0x200000ULL;
-                break;
-            case 3:
-                virtBase = index * 0x40000000ULL;
-                break;
-            case 4:
-                virtBase = index * 0x8000000000ULL;
-                break;
-            default:
-                return false;
-        }
-        if (virtBase != 0) asm volatile ("invlpg (%0)" :: "r"(virtBase) : "memory");
-
-        stackPtr--;
-        if (parent && level < 4) break;
-    }
-
-    return true;
+    if (tableEmpty(pdpt)) freeTable(pml4, static_cast<uint16_t>(pml4Index));
 }
 
 void FrameAllocator::init()
@@ -357,9 +284,9 @@ void FrameAllocator::init()
     LockGuard guard(frameAllocatorLock);
     uint64_t bestBase = 0, bestSize = 0;
 
-    for (size_t i = 0; i < memory_request.response->entry_count; ++i)
+    for (size_t i = 0; i < memmap_request.response->entry_count; ++i)
     {
-        const auto* entry = memory_request.response->entries[i];
+        const auto* entry = memmap_request.response->entries[i];
         if (entry->type != LIMINE_MEMMAP_USABLE || entry->base < BIOS_START) continue;
         if (entry->length > bestSize)
         {
@@ -410,8 +337,7 @@ void FrameAllocator::free(void* frame)
 {
     LockGuard guard(frameAllocatorLock);
 
-    const auto addr = reinterpret_cast<uint64_t>(frame);
-    const uint64_t phys = addr - hhdm_request.response->offset;
+    const auto phys = reinterpret_cast<uint64_t>(frame);
     if (phys < memoryBase || phys >= memoryBase + memorySize || (phys - memoryBase) % SMALL_SIZE != 0) return;
 
     const uint64_t index = (phys - memoryBase) / SMALL_SIZE;
@@ -421,8 +347,7 @@ void FrameAllocator::free(void* frame)
 
 void FrameAllocator::reserve(void* frame)
 {
-    const auto addr = reinterpret_cast<uint64_t>(frame);
-    const uint64_t phys = addr - hhdm_request.response->offset;
+    const auto phys = reinterpret_cast<uint64_t>(frame);
     if (phys < memoryBase || phys >= memoryBase + memorySize || (phys - memoryBase) % SMALL_SIZE != 0) return;
 
     const uint64_t index = (phys - memoryBase) / SMALL_SIZE;
@@ -434,8 +359,7 @@ bool FrameAllocator::used(void* frame)
 {
     LockGuard guard(frameAllocatorLock);
 
-    const auto addr = reinterpret_cast<uint64_t>(frame);
-    const uint64_t phys = addr - hhdm_request.response->offset;
+    const auto phys = reinterpret_cast<uint64_t>(frame);
     if (phys < memoryBase || phys >= memoryBase + memorySize || (phys - memoryBase) % SMALL_SIZE != 0) return false;
 
     const uint64_t index = (phys - memoryBase) / SMALL_SIZE;

@@ -46,10 +46,6 @@ public:
     static void unmapLarge(uint64_t virtualAddress);
 
 private:
-    static void cleanup(uint64_t* startTable, uint16_t startIndex, int startLevel, uint64_t pdptIndex, uint64_t pdIndex,
-                        const uint64_t* pd, const uint64_t* pdpt);
-    static bool cleanupPageTable(uint64_t* rootTable, uint16_t rootIndex, int rootLevel);
-
     static Spinlock pagingLock;
 };
 

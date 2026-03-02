@@ -14,8 +14,10 @@ static bool signaturesMatch(const char* sig1, const char* sig2, const size_t len
 static ACPI::SDTHeader* findTable(ACPI::SDTHeader* sdt, const char signature[4])
 {
     const bool isXSDT = signaturesMatch(sdt->signature, "XSDT", 4);
-    const auto* base = reinterpret_cast<uint8_t*>(sdt) + sizeof(ACPI::SDTHeader);
+    const bool isRSDT = signaturesMatch(sdt->signature, "RSDT", 4);
+    if (!isXSDT && !isRSDT) return nullptr;
 
+    const auto* base = reinterpret_cast<uint8_t*>(sdt) + sizeof(ACPI::SDTHeader);
     for (uint64_t i = 0; i < (sdt->length - sizeof(ACPI::SDTHeader)) / (isXSDT ? 8 : 4); ++i)
     {
         const uint64_t phys = isXSDT
@@ -37,22 +39,32 @@ bool ACPI::init(MADTInfo& madtInfo)
         return false;
     }
 
-    const auto* rsdp = reinterpret_cast<RSDP*>(reinterpret_cast<uint64_t>(rsdp_request.response->address) + hhdm_request
-        .response->offset);
+    const auto* rsdp = reinterpret_cast<RSDP*>(rsdp_request.response->address);
     if (!signaturesMatch(rsdp->signature, "RSD PTR ", 8))
     {
         Serial::printf("ACPI: Invalid RSDP signature\n");
         return false;
     }
 
-    if (rsdp->revision < 2 || rsdp->xsdtAddress == 0)
+    SDTHeader* root = nullptr;
+    if (rsdp->revision >= 2 && rsdp->xsdtAddress)
     {
-        Serial::printf("ACPI: Need ACPI 2.0+ with XSDT support\n");
+        root = reinterpret_cast<SDTHeader*>(rsdp->xsdtAddress + hhdm_request.response->offset);
+        if (!signaturesMatch(root->signature, "XSDT", 4)) Serial::printf("ACPI: Invalid XSDT signature\n");
+    }
+    else if (rsdp->rsdtAddress)
+    {
+        root = reinterpret_cast<SDTHeader*>(static_cast<uint64_t>(rsdp->rsdtAddress) + hhdm_request.response->offset);
+        if (!signaturesMatch(root->signature, "RSDT", 4)) Serial::printf("ACPI: Invalid RSDT signature\n");
+    }
+    else
+    {
+        Serial::printf("ACPI: No valid RSDT/XSDT address in RSDP (revision %u, RSDT 0x%X, XSDT 0x%lX)\n",
+                       rsdp->revision, rsdp->rsdtAddress, rsdp->xsdtAddress);
         return false;
     }
 
-    auto* madtHeader = findTable(reinterpret_cast<SDTHeader*>(rsdp->xsdtAddress + hhdm_request.response->offset),
-                                 "APIC");
+    auto* madtHeader = findTable(root, "APIC");
     if (!madtHeader)
     {
         Serial::printf("ACPI: MADT not found\n");
