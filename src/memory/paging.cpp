@@ -81,15 +81,14 @@ void Paging::init()
 
     for (uint64_t offset = 0; offset < kernelSize; offset += FrameAllocator::SMALL_SIZE)
     {
-        uint64_t phys = kernelPhysStart + offset;
-        uint64_t virt = kernelVirtStart + offset;
+        uint64_t phys = kernelPhysStart + offset, virt = kernelVirtStart + offset;
 
-        if (!mapSmall(phys, phys, PageFlags::PRESENT | PageFlags::RW))
+        if (!mapSmall(phys, phys, PageFlags::PRESENT | PageFlags::RW | PageFlags::GLOBAL))
         {
             Serial::printf("Paging: Failed to map kernel page at 0x%lx to 0x%lx.\n", phys, virt);
             while (true) asm volatile ("hlt");
         }
-        if (!mapSmall(virt, phys, PageFlags::PRESENT | PageFlags::RW))
+        if (!mapSmall(virt, phys, PageFlags::PRESENT | PageFlags::RW | PageFlags::GLOBAL))
         {
             Serial::printf("Paging: Failed to map kernel page at 0x%lx to 0x%lx.\n", virt, phys);
             while (true) asm volatile ("hlt");
@@ -136,10 +135,11 @@ void Paging::init()
     asm volatile ("mov %0, %%cr3" :: "r"(pml4Phys) : "memory");
     uint64_t cr4;
     asm volatile ("mov %%cr4, %0" : "=r"(cr4));
-    cr4 |= 1 << 5;
-    asm volatile ("mov %0, %%cr4" :: "r"(cr4));
+    cr4 |= 1ULL << 7;
+    asm volatile ("mov %0, %%cr4" :: "r"(cr4) : "memory");
     uint32_t eax, edx;
-    asm volatile ("mov $0xC0000080, %%ecx\nrdmsr\nor $(1 << 8), %%eax\nwrmsr\n" : "=a"(eax), "=d"(edx) :: "ecx");
+    asm volatile ("mov $0xC0000080, %%ecx\nrdmsr\nor $(1 << 11), %%eax\nwrmsr\n" : "=a"(eax), "=d"(edx) :: "ecx",
+        "memory");
     uint64_t cr0;
     asm volatile ("mov %%cr0, %0" : "=r"(cr0));
     cr0 |= 1 << 31 | 1 << 16;
@@ -311,9 +311,27 @@ void FrameAllocator::init()
     totalFrames = memorySize / SMALL_SIZE;
     usedFrames = 0;
 
-    for (uint64_t i = 0; i < bitmapPages; ++i)
-        reserve(
-            reinterpret_cast<void*>(hhdm_request.response->offset + bitmapPhys + i * SMALL_SIZE));
+    const uint64_t allocStart = memoryBase;
+    const uint64_t allocEnd = memoryBase + memorySize;
+
+    for (size_t i = 0; i < memmap_request.response->entry_count; ++i)
+    {
+        const auto* e = memmap_request.response->entries[i];
+        if (e->length == 0) continue;
+        if (e->type == LIMINE_MEMMAP_USABLE) continue;
+
+        uint64_t start = e->base, end = e->base + e->length;
+        if (end <= allocStart || start >= allocEnd) continue;
+        if (start < allocStart) start = allocStart;
+        if (end > allocEnd) end = allocEnd;
+
+        start = (start + SMALL_SIZE - 1) & ~(SMALL_SIZE - 1);
+        end = end & ~(SMALL_SIZE - 1);
+
+        for (uint64_t p = start; p < end; p += SMALL_SIZE) reserve(reinterpret_cast<void*>(p));
+    }
+
+    for (uint64_t i = 0; i < bitmapPages; ++i) reserve(reinterpret_cast<void*>(bitmapPhys + i * SMALL_SIZE));
 }
 
 void* FrameAllocator::alloc()
