@@ -1,8 +1,6 @@
 #include <arch/common/spinlock.h>
 
-Spinlock::Spinlock() : locked(0)
-{
-}
+Spinlock::Spinlock() : locked(0) {}
 
 void Spinlock::lock() { while (__atomic_test_and_set(&locked, __ATOMIC_ACQUIRE)) asm volatile ("pause"); }
 

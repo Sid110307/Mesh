@@ -120,8 +120,6 @@ void SMP::waitForAPs()
 {
     int timeout = 1000000;
     uint32_t expectedAPs = apCount;
-
-    Renderer::printf("\x1b[36m[SMP] \x1b[96mWaiting for %u APs to come online...\x1b[0m\n", expectedAPs);
     while (apReadyCount.load() < expectedAPs && timeout--) asm volatile ("pause");
 
     if (timeout <= 0)

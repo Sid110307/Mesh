@@ -58,117 +58,117 @@ void Renderer::escapeAnsi(const char* seq, uint32_t& fg, uint32_t& bg, const uin
     {
         switch (atoi(token))
         {
-        case 0:
-            fg = fgDefault;
-            bg = bgDefault;
+            case 0:
+                fg = fgDefault;
+                bg = bgDefault;
 
-            break;
-        case 1:
-        case 7:
-            swap(fg, bg);
-            break;
-        case 2:
-            clear(bg);
-            break;
-        case 30:
-            fg = BLACK;
-            break;
-        case 31:
-            fg = RED;
-            break;
-        case 32:
-            fg = GREEN;
-            break;
-        case 33:
-            fg = YELLOW;
-            break;
-        case 34:
-            fg = BLUE;
-            break;
-        case 35:
-            fg = MAGENTA;
-            break;
-        case 36:
-            fg = CYAN;
-            break;
-        case 37:
-            fg = WHITE;
-            break;
-        case 40:
-            bg = BLACK;
-            break;
-        case 41:
-            bg = RED;
-            break;
-        case 42:
-            bg = GREEN;
-            break;
-        case 43:
-            bg = YELLOW;
-            break;
-        case 44:
-            bg = BLUE;
-            break;
-        case 45:
-            bg = MAGENTA;
-            break;
-        case 46:
-            bg = CYAN;
-            break;
-        case 47:
-            bg = WHITE;
-            break;
-        case 90:
-            fg = LIGHT_BLACK;
-            break;
-        case 91:
-            fg = LIGHT_RED;
-            break;
-        case 92:
-            fg = LIGHT_GREEN;
-            break;
-        case 93:
-            fg = LIGHT_YELLOW;
-            break;
-        case 94:
-            fg = LIGHT_BLUE;
-            break;
-        case 95:
-            fg = LIGHT_MAGENTA;
-            break;
-        case 96:
-            fg = LIGHT_CYAN;
-            break;
-        case 97:
-            fg = LIGHT_WHITE;
-            break;
-        case 100:
-            bg = LIGHT_BLACK;
-            break;
-        case 101:
-            bg = LIGHT_RED;
-            break;
-        case 102:
-            bg = LIGHT_GREEN;
-            break;
-        case 103:
-            bg = LIGHT_YELLOW;
-            break;
-        case 104:
-            bg = LIGHT_BLUE;
-            break;
-        case 105:
-            bg = LIGHT_MAGENTA;
-            break;
-        case 106:
-            bg = LIGHT_CYAN;
-            break;
-        case 107:
-            bg = LIGHT_WHITE;
-            break;
-        default:
-            Serial::printf("Renderer: Unsupported ANSI escape code: %s\n", token);
-            break;
+                break;
+            case 1:
+            case 7:
+                swap(fg, bg);
+                break;
+            case 2:
+                clear(bg);
+                break;
+            case 30:
+                fg = BLACK;
+                break;
+            case 31:
+                fg = RED;
+                break;
+            case 32:
+                fg = GREEN;
+                break;
+            case 33:
+                fg = YELLOW;
+                break;
+            case 34:
+                fg = BLUE;
+                break;
+            case 35:
+                fg = MAGENTA;
+                break;
+            case 36:
+                fg = CYAN;
+                break;
+            case 37:
+                fg = WHITE;
+                break;
+            case 40:
+                bg = BLACK;
+                break;
+            case 41:
+                bg = RED;
+                break;
+            case 42:
+                bg = GREEN;
+                break;
+            case 43:
+                bg = YELLOW;
+                break;
+            case 44:
+                bg = BLUE;
+                break;
+            case 45:
+                bg = MAGENTA;
+                break;
+            case 46:
+                bg = CYAN;
+                break;
+            case 47:
+                bg = WHITE;
+                break;
+            case 90:
+                fg = LIGHT_BLACK;
+                break;
+            case 91:
+                fg = LIGHT_RED;
+                break;
+            case 92:
+                fg = LIGHT_GREEN;
+                break;
+            case 93:
+                fg = LIGHT_YELLOW;
+                break;
+            case 94:
+                fg = LIGHT_BLUE;
+                break;
+            case 95:
+                fg = LIGHT_MAGENTA;
+                break;
+            case 96:
+                fg = LIGHT_CYAN;
+                break;
+            case 97:
+                fg = LIGHT_WHITE;
+                break;
+            case 100:
+                bg = LIGHT_BLACK;
+                break;
+            case 101:
+                bg = LIGHT_RED;
+                break;
+            case 102:
+                bg = LIGHT_GREEN;
+                break;
+            case 103:
+                bg = LIGHT_YELLOW;
+                break;
+            case 104:
+                bg = LIGHT_BLUE;
+                break;
+            case 105:
+                bg = LIGHT_MAGENTA;
+                break;
+            case 106:
+                bg = LIGHT_CYAN;
+                break;
+            case 107:
+                bg = LIGHT_WHITE;
+                break;
+            default:
+                Serial::printf("Renderer: Unsupported ANSI escape code: %s\n", token);
+                break;
         }
         token = strtok_r(nullptr, ";", &savePtr);
     }

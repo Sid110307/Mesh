@@ -206,78 +206,78 @@ void vformat(const char* fmt, va_list args, const putCharFn putc, const putStrFn
 
         switch (const char spec = fmt[++i])
         {
-        case '%':
-            {
+            case '%':
+                {
+                    putc('%');
+                    break;
+                }
+            case 'c':
+                {
+                    putc(static_cast<char>(va_arg(args, int)));
+                    break;
+                }
+            case 's':
+                {
+                    const char* str = va_arg(args, const char*);
+                    puts(str ? str : "(null)");
+
+                    break;
+                }
+            case 'd':
+            case 'i':
+                {
+                    putSigned(va_arg(args, int));
+                    break;
+                }
+            case 'u':
+                {
+                    putUnsigned(va_arg(args, unsigned int));
+                    break;
+                }
+            case 'x':
+            case 'X':
+                {
+                    putHex(va_arg(args, uint64_t));
+                    break;
+                }
+            case 'p':
+                {
+                    if (void* ptr = va_arg(args, void*)) putHex(reinterpret_cast<uint64_t>(ptr));
+                    else puts("(null)");
+
+                    break;
+                }
+            case 'l':
+                {
+                    if (const char next = fmt[++i]; next == 'd' || next == 'i') putSigned(va_arg(args, long));
+                    else if (next == 'u') putUnsigned(va_arg(args, unsigned long));
+                    else if (next == 'x' || next == 'X') putHex(va_arg(args, unsigned long));
+                    else
+                    {
+                        putc('%');
+                        putc(next);
+                    }
+
+                    break;
+                }
+            case 'z':
+                {
+                    if (const char next = fmt[++i]; next == 'd' || next == 'i') putSigned(va_arg(args, intptr_t));
+                    else if (next == 'u') putUnsigned(va_arg(args, size_t));
+                    else if (next == 'x' || next == 'X') putHex(va_arg(args, size_t));
+                    else
+                    {
+                        putc('%');
+                        putc(next);
+                    }
+
+                    break;
+                }
+            default:
                 putc('%');
-                break;
-            }
-        case 'c':
-            {
-                putc(static_cast<char>(va_arg(args, int)));
-                break;
-            }
-        case 's':
-            {
-                const char* str = va_arg(args, const char*);
-                puts(str ? str : "(null)");
+                putc(spec);
 
                 break;
-            }
-        case 'd':
-        case 'i':
-            {
-                putSigned(va_arg(args, int));
-                break;
-            }
-        case 'u':
-            {
-                putUnsigned(va_arg(args, unsigned int));
-                break;
-            }
-        case 'x':
-        case 'X':
-            {
-                putHex(va_arg(args, uint64_t));
-                break;
-            }
-        case 'p':
-            {
-                if (void* ptr = va_arg(args, void*)) putHex(reinterpret_cast<uint64_t>(ptr));
-                else puts("(null)");
-
-                break;
-            }
-        case 'l':
-            {
-                if (const char next = fmt[++i]; next == 'd' || next == 'i') putSigned(va_arg(args, long));
-                else if (next == 'u') putUnsigned(va_arg(args, unsigned long));
-                else if (next == 'x' || next == 'X') putHex(va_arg(args, unsigned long));
-                else
-                {
-                    putc('%');
-                    putc(next);
-                }
-
-                break;
-            }
-        case 'z':
-            {
-                if (const char next = fmt[++i]; next == 'd' || next == 'i') putSigned(va_arg(args, intptr_t));
-                else if (next == 'u') putUnsigned(va_arg(args, size_t));
-                else if (next == 'x' || next == 'X') putHex(va_arg(args, size_t));
-                else
-                {
-                    putc('%');
-                    putc(next);
-                }
-
-                break;
-            }
-        default:
-            putc('%');
-            putc(spec);
-
-            break;
         }
     }
 }

@@ -322,19 +322,19 @@ bool Paging::cleanupPageTable(uint64_t* rootTable, uint16_t rootIndex, int rootL
         uint64_t virtBase = 0;
         switch (level)
         {
-        case 1:
-            break;
-        case 2:
-            virtBase = index * 0x200000ULL;
-            break;
-        case 3:
-            virtBase = index * 0x40000000ULL;
-            break;
-        case 4:
-            virtBase = index * 0x8000000000ULL;
-            break;
-        default:
-            return false;
+            case 1:
+                break;
+            case 2:
+                virtBase = index * 0x200000ULL;
+                break;
+            case 3:
+                virtBase = index * 0x40000000ULL;
+                break;
+            case 4:
+                virtBase = index * 0x8000000000ULL;
+                break;
+            default:
+                return false;
         }
         if (virtBase != 0) asm volatile ("invlpg (%0)" :: "r"(virtBase) : "memory");
 

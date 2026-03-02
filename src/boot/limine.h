@@ -561,6 +561,7 @@ struct limine_entry_point_request
 struct limine_executable_file_response
 {
 
+
 #else
 struct limine_kernel_file_response
 {
@@ -576,6 +577,7 @@ struct limine_kernel_file_response
 #if LIMINE_API_REVISION >= 2
 struct limine_executable_file_request
 {
+
 
 #else
 struct limine_kernel_file_request
@@ -723,6 +725,7 @@ struct limine_efi_memmap_request
 struct limine_date_at_boot_response
 {
 
+
 #else
 struct limine_boot_time_response
 {
@@ -738,6 +741,7 @@ struct limine_boot_time_response
 #if LIMINE_API_REVISION >= 3
 struct limine_date_at_boot_request
 {
+
 
 #else
 struct limine_boot_time_request
@@ -764,6 +768,7 @@ struct limine_boot_time_request
 struct limine_executable_address_response
 {
 
+
 #else
 struct limine_kernel_address_response
 {
@@ -776,6 +781,7 @@ struct limine_kernel_address_response
 #if LIMINE_API_REVISION >= 2
 struct limine_executable_address_request
 {
+
 
 #else
 struct limine_kernel_address_request
