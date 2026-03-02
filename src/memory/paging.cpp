@@ -311,9 +311,6 @@ void FrameAllocator::init()
     totalFrames = memorySize / SMALL_SIZE;
     usedFrames = 0;
 
-    const uint64_t allocStart = memoryBase;
-    const uint64_t allocEnd = memoryBase + memorySize;
-
     for (size_t i = 0; i < memmap_request.response->entry_count; ++i)
     {
         const auto* e = memmap_request.response->entries[i];
@@ -321,16 +318,15 @@ void FrameAllocator::init()
         if (e->type == LIMINE_MEMMAP_USABLE) continue;
 
         uint64_t start = e->base, end = e->base + e->length;
-        if (end <= allocStart || start >= allocEnd) continue;
-        if (start < allocStart) start = allocStart;
-        if (end > allocEnd) end = allocEnd;
+        if (end <= memoryBase || start >= memoryBase + memorySize) continue;
+        if (start < memoryBase) start = memoryBase;
+        if (end > memoryBase + memorySize) end = memoryBase + memorySize;
 
         start = (start + SMALL_SIZE - 1) & ~(SMALL_SIZE - 1);
         end = end & ~(SMALL_SIZE - 1);
 
         for (uint64_t p = start; p < end; p += SMALL_SIZE) reserve(reinterpret_cast<void*>(p));
     }
-
     for (uint64_t i = 0; i < bitmapPages; ++i) reserve(reinterpret_cast<void*>(bitmapPhys + i * SMALL_SIZE));
 }
 

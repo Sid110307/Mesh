@@ -97,26 +97,6 @@ void initPaging()
     Renderer::printf("\x1b[32mDone!\n");
 }
 
-void initAPIC()
-{
-    Renderer::printf("\x1b[36mChecking LAPIC status... ");
-
-    uint32_t low, high;
-    asm volatile ("rdmsr" : "=a"(low), "=d"(high) : "c"(0x1B));
-
-    uint64_t apicBase = static_cast<uint64_t>(high) << 32 | low;
-    bool apic = apicBase & 1ULL << 11;
-    bool x2apic = apicBase & 1ULL << 10;
-
-    if (apic)
-    {
-        Renderer::printf("\x1b[32mEnabled\x1b[0m");
-        if (x2apic) Renderer::printf(" \x1b[90m(x2APIC)\x1b[0m");
-        Renderer::printf("\n");
-    }
-    else Renderer::printf("\x1b[31mDisabled\x1b[0m\n");
-}
-
 void initIOAPIC()
 {
     Renderer::printf("\x1b[36mInitializing IOAPIC... ");
@@ -154,7 +134,6 @@ extern "C" [[noreturn]] void kernelMain()
     initPaging();
     initGDT();
     initIDT();
-    initAPIC();
     SMP::init();
     LAPIC::init(SMP::getLapicBase());
     initIOAPIC();
