@@ -31,7 +31,7 @@ set(OUT_DIR ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
 set(ISO_ROOT ${CMAKE_BINARY_DIR}/iso)
 set(LIMINE_ROOT /usr/local/share/limine)
 
-set(CMAKE_C_FLAGS "-ffreestanding -g -O2 -Wall -Wextra -m64 -mno-red-zone")
+set(CMAKE_C_FLAGS "-ffreestanding -g -O2 -Wall -Wextra -m64 -mno-red-zone -mno-sse -mno-sse2 -mno-mmx -mno-80387")
 set(CMAKE_CXX_FLAGS "${CMAKE_C_FLAGS} -fno-exceptions -fno-rtti")
 set(CMAKE_ASM_NASM_FLAGS "-f elf64")
 set(CMAKE_EXE_LINKER_FLAGS "-nostdlib -z noexecstack -static -T ${CMAKE_SOURCE_DIR}/lib/linker.ld")
@@ -72,7 +72,6 @@ endforeach ()
 add_custom_target(embedded_assets ALL DEPENDS ${EMBED_ASSET_OBJS})
 add_executable(mesh.elf ${ASM_NASM_SRC} ${C_SRC} ${CPP_SRC} ${EMBED_ASSET_OBJS})
 add_dependencies(mesh.elf embedded_assets)
-set_source_files_properties(src/kernel/arch/isr.cpp PROPERTIES COMPILE_FLAGS "-mno-sse -mno-sse2 -mno-mmx -mno-80387")
 
 add_custom_command(
     OUTPUT ${OUT_DIR}/Mesh.iso

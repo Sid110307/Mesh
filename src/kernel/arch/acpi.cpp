@@ -37,7 +37,8 @@ bool ACPI::init(MADTInfo& madtInfo)
         return false;
     }
 
-    const auto* rsdp = static_cast<RSDP*>(rsdp_request.response->address);
+    const auto* rsdp = reinterpret_cast<RSDP*>(reinterpret_cast<uint64_t>(rsdp_request.response->address) + hhdm_request
+        .response->offset);
     if (!signaturesMatch(rsdp->signature, "RSD PTR ", 8))
     {
         Serial::printf("ACPI: Invalid RSDP signature\n");
@@ -75,7 +76,7 @@ bool ACPI::init(MADTInfo& madtInfo)
         {
             auto* ioapicEntry = reinterpret_cast<const MADT_IOAPIC*>(start);
             madtInfo.ioapicPhys = ioapicEntry->ioapicAddr;
-            madtInfo.ioApicGlobalIrqBase = ioapicEntry->globalIrqBase;
+            madtInfo.ioapicGlobalIrqBase = ioapicEntry->globalIrqBase;
         }
         else if (entryHeader->type == 2 && entryHeader->length >= sizeof(MADT_ISO))
         {

@@ -17,6 +17,22 @@ extern limine_kernel_address_request kernel_addr_request;
 extern limine_smp_request smp_request;
 extern limine_boot_time_request boot_time_request;
 
+void initSSE()
+{
+    uint64_t cr0, cr4;
+
+    asm volatile("mov %%cr0, %0" : "=r"(cr0));
+    cr0 &= ~(1ULL << 2);
+    cr0 |= 1ULL << 1;
+    asm volatile("mov %0, %%cr0" :: "r"(cr0));
+
+    asm volatile("mov %%cr4, %0" : "=r"(cr4));
+    cr4 |= (1ULL << 9) | (1ULL << 10);
+    asm volatile("mov %0, %%cr4" :: "r"(cr4));
+
+    asm volatile("fninit");
+}
+
 void initRenderer()
 {
     Renderer::init();
@@ -112,7 +128,14 @@ void initIOAPIC()
         return;
     }
 
-    IOAPIC::init(madt.ioapicPhys + hhdm_request.response->offset, madt.ioApicGlobalIrqBase);
+    const uint64_t ioapicVirt = madt.ioapicPhys + hhdm_request.response->offset;
+    if (!Paging::mapSmall(ioapicVirt, madt.ioapicPhys, PageFlags::PRESENT | PageFlags::RW))
+    {
+        Renderer::printf("\x1b[31mFailed to map IOAPIC MMIO\x1b[0m\n");
+        return;
+    }
+
+    IOAPIC::init(ioapicVirt, madt.ioapicGlobalIrqBase);
     IOAPIC::redirect(madt.hasIso ? madt.irq1GlobalIrqBase : 1, 0x21,
                      static_cast<uint8_t>(smp_request.response->bsp_lapic_id), madt.irq1ActiveLow,
                      madt.irq1LevelTriggered);
@@ -122,6 +145,7 @@ void initIOAPIC()
 
 extern "C" [[noreturn]] void kernelMain()
 {
+    initSSE();
     initRenderer();
     Renderer::setSerialPrint(true);
     dumpStats();

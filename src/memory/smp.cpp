@@ -19,16 +19,14 @@ static uint32_t apCount = 0;
 
 Atomic SMP::apReadyCount{0};
 uint32_t SMP::cpuCount = 0, cpuIDs[SMP::MAX_CPUS] = {};
-uint64_t SMP::lapicVirtBase = 0;
+uint64_t SMP::lapicPhysBase = 0, SMP::lapicVirtBase = 0;
 
 extern "C" [[noreturn]] void apMain(uint32_t cpuID)
 {
     GDTManager::load();
     IDTManager::load();
     GDTManager::loadTR(cpuID);
-
     SMP::apReadyCount.increment();
-    Renderer::printf("\x1b[33m[AP] Core %u online!\x1b[0m\n", cpuID);
 
     asm volatile ("sti");
     while (true) asm volatile ("hlt");
@@ -43,7 +41,14 @@ void SMP::init()
 
     uint32_t low, high;
     asm volatile ("rdmsr" : "=a"(low), "=d"(high) : "c"(0x1B));
-    lapicVirtBase = ((static_cast<uint64_t>(high) << 32 | low) & 0xFFFFF000) + hhdm_request.response->offset;
+    lapicPhysBase = (static_cast<uint64_t>(high) << 32 | low) & 0xFFFFF000;
+    lapicVirtBase = lapicPhysBase + hhdm_request.response->offset;
+
+    if (!Paging::mapSmall(lapicVirtBase, lapicPhysBase, PageFlags::PRESENT | PageFlags::RW))
+    {
+        Renderer::printf("\x1b[31m[SMP] Failed to map LAPIC MMIO!\x1b[0m\n");
+        return;
+    }
 
     uint32_t logicalID = 0;
     apCount = 0;

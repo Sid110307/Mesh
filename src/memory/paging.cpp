@@ -101,34 +101,13 @@ void Paging::init()
             LIMINE_MEMMAP_FRAMEBUFFER)
             if (uint64_t end = entry->base + entry->length; end > maxPhys) maxPhys = end;
 
-    if (maxPhys % FrameAllocator::LARGE_SIZE == 0)
-    {
-        for (uint64_t phys = 0; phys < maxPhys; phys += FrameAllocator::LARGE_SIZE)
-            if (!mapLarge(hhdm_request.response->offset + phys, phys, PageFlags::PRESENT | PageFlags::RW))
-            {
-                Serial::printf("Paging: Failed to map HHDM large page at 0x%lx.\n",
-                               hhdm_request.response->offset + phys);
-                while (true) asm volatile ("hlt");
-            }
-    }
-    else if (maxPhys % FrameAllocator::MEDIUM_SIZE == 0)
-    {
-        for (uint64_t phys = 0; phys < maxPhys; phys += FrameAllocator::MEDIUM_SIZE)
-            if (!mapMedium(hhdm_request.response->offset + phys, phys, PageFlags::PRESENT | PageFlags::RW))
-            {
-                Serial::printf("Paging: Failed to map HHDM medium page at 0x%lx.\n",
-                               hhdm_request.response->offset + phys);
-                while (true) asm volatile ("hlt");
-            }
-    }
-    else
-        for (uint64_t phys = 0; phys < maxPhys; phys += FrameAllocator::SMALL_SIZE)
-            if (!mapSmall(hhdm_request.response->offset + phys, phys, PageFlags::PRESENT | PageFlags::RW))
-            {
-                Serial::printf("Paging: Failed to map HHDM small page at 0x%lx.\n",
-                               hhdm_request.response->offset + phys);
-                while (true) asm volatile ("hlt");
-            }
+    for (uint64_t phys = 0; phys < maxPhys; phys += FrameAllocator::SMALL_SIZE)
+        if (!mapSmall(hhdm_request.response->offset + phys, phys, PageFlags::PRESENT | PageFlags::RW))
+        {
+            Serial::printf("Paging: Failed to map physical memory page at 0x%lx.\n",
+                           phys + hhdm_request.response->offset);
+            while (true) asm volatile ("hlt");
+        }
 
     uint64_t pml4Phys = reinterpret_cast<uint64_t>(pml4) - hhdm_request.response->offset;
     if (!mapSmall(reinterpret_cast<uint64_t>(pml4), pml4Phys, PageFlags::PRESENT | PageFlags::RW))

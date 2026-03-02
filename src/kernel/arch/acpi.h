@@ -7,9 +7,7 @@ class ACPI
 public:
     struct MADTInfo
     {
-        uint64_t ioapicPhys = 0;
-        uint64_t ioApicGlobalIrqBase = 0;
-
+        uint64_t ioapicPhys = 0, ioapicGlobalIrqBase = 0;
         bool hasIso = false;
         uint32_t irq1GlobalIrqBase = 1;
         bool irq1ActiveLow = false, irq1LevelTriggered = false;

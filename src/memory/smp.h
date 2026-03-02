@@ -27,5 +27,5 @@ public:
 private:
     static void waitForAPs();
     static Spinlock smpLock;
-    static uint64_t lapicVirtBase;
+    static uint64_t lapicPhysBase, lapicVirtBase;
 };

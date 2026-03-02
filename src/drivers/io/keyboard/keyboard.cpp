@@ -119,7 +119,7 @@ void Keyboard::writeCommand(const uint8_t cmd)
 {
     if (!waitInputClear())
     {
-        Serial::printf("Keyboard: Timeout waiting for input buffer to clear when writing 0x%lx\n", cmd);
+        Serial::printf("Keyboard: Timeout waiting for input buffer to clear when writing 0x%x\n", cmd);
         return;
     }
     outb(STATUS_PORT, cmd);
@@ -129,7 +129,7 @@ void Keyboard::writeData(const uint8_t data)
 {
     if (!waitInputClear())
     {
-        Serial::printf("Keyboard: Timeout waiting for input buffer to clear when writing data 0x%lx\n", data);
+        Serial::printf("Keyboard: Timeout waiting for input buffer to clear when writing data 0x%x\n", data);
         return;
     }
     outb(DATA_PORT, data);
@@ -157,21 +157,21 @@ bool Keyboard::sendKeyboardCommand(const uint8_t cmd, const uint8_t data)
         writeData(cmd);
         if (!waitOutputSet())
         {
-            Serial::printf("Keyboard: Timeout waiting for output buffer to be set after sending 0x%lx\n", cmd);
+            Serial::printf("Keyboard: Timeout waiting for output buffer to be set after sending 0x%x\n", cmd);
             continue;
         }
         resp = readData();
         if (resp == 0xFE) continue;
         if (resp != 0xFA)
         {
-            Serial::printf("Keyboard: Unexpected response 0x%lx after sending 0x%lx\n", resp, cmd);
+            Serial::printf("Keyboard: Unexpected response 0x%x after sending 0x%x\n", resp, cmd);
             return false;
         }
 
         writeData(data);
         if (!waitOutputSet())
         {
-            Serial::printf("Keyboard: Timeout waiting for output buffer to be set after sending data 0x%lx for 0x%lx\n",
+            Serial::printf("Keyboard: Timeout waiting for output buffer to be set after sending data 0x%x for 0x%x\n",
                            data, cmd);
             continue;
         }
@@ -179,11 +179,11 @@ bool Keyboard::sendKeyboardCommand(const uint8_t cmd, const uint8_t data)
         if (resp == 0xFE) continue;
         if (resp == 0xFA) return true;
 
-        Serial::printf("Keyboard: Unexpected response 0x%lx after sending data 0x%lx for 0x%lx\n", resp, data, cmd);
+        Serial::printf("Keyboard: Unexpected response 0x%x after sending data 0x%x for 0x%x\n", resp, data, cmd);
         return false;
     }
 
-    Serial::printf("Keyboard: Failed to send 0x%lx after multiple attempts\n", cmd);
+    Serial::printf("Keyboard: Failed to send 0x%x after multiple attempts\n", cmd);
     return false;
 }
 

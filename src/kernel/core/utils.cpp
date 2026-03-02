@@ -238,7 +238,7 @@ void vformat(const char* fmt, va_list args, const putCharFn putc, const putStrFn
             case 'x':
             case 'X':
                 {
-                    putHex(va_arg(args, uint64_t));
+                    putHex(va_arg(args, unsigned int));
                     break;
                 }
             case 'p':

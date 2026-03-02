@@ -52,7 +52,7 @@
 ### Installing Limine
 
 ```bash
-$ git clone --branch=v9.x https://github.com/limine-bootloader/limine.git
+$ git clone --branch=v10.x https://github.com/limine-bootloader/limine.git
 $ cd limine
 $ ./bootstrap
 $ ./configure
@@ -61,7 +61,7 @@ $ sudo make install
 ```
 
 ```bash
-$ git clone --branch=v9.x-binary https://github.com/limine-bootloader/limine.git limine-binary
+$ git clone --branch=v10.x-binary https://github.com/limine-bootloader/limine.git limine-binary
 $ cd limine-binary
 $ make
 $ sudo make install

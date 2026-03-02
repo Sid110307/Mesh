@@ -53,35 +53,35 @@ static void showException(InterruptFrame* frame, uint64_t intNum, uint64_t error
         case 8:
             {
                 Renderer::printf("Error: Double fault.\n");
-                if (errorCode) Renderer::printf("Error Code: 0x%lx (%lu)\n", errorCode, errorCode);
+                if (errorCode) Renderer::printf("Error Code: 0x%x (%lu)\n", errorCode, errorCode);
 
                 break;
             }
         case 9:
             {
                 Renderer::printf("Error: Coprocessor segment overrun.\n");
-                if (errorCode) Renderer::printf("Error Code: 0x%lx (%lu)\n", errorCode, errorCode);
+                if (errorCode) Renderer::printf("Error Code: 0x%x (%lu)\n", errorCode, errorCode);
 
                 break;
             }
         case 10:
             {
                 Renderer::printf("Error: Invalid TSS.\n");
-                if (errorCode) Renderer::printf("Error Code: 0x%lx (%lu)\n", errorCode, errorCode);
+                if (errorCode) Renderer::printf("Error Code: 0x%x (%lu)\n", errorCode, errorCode);
 
                 break;
             }
         case 11:
             {
                 Renderer::printf("Error: Segment not present.\n");
-                if (errorCode) Renderer::printf("Error Code: 0x%lx (%lu)\n", errorCode, errorCode);
+                if (errorCode) Renderer::printf("Error Code: 0x%x (%lu)\n", errorCode, errorCode);
 
                 break;
             }
         case 12:
             {
                 Renderer::printf("Error: Stack segment fault.\n");
-                if (errorCode) Renderer::printf("Error Code: 0x%lx (%lu)\n", errorCode, errorCode);
+                if (errorCode) Renderer::printf("Error Code: 0x%x (%lu)\n", errorCode, errorCode);
 
                 break;
             }
@@ -111,7 +111,7 @@ static void showException(InterruptFrame* frame, uint64_t intNum, uint64_t error
             {
                 uint64_t faultAddr;
                 asm volatile ("mov %%cr2, %0" : "=r"(faultAddr));
-                Renderer::printf("Error: Page fault.\nAddress: 0x%lx\nError Code: 0x%lx (%lu)\nDetails:\n", faultAddr,
+                Renderer::printf("Error: Page fault.\nAddress: 0x%lx\nError Code: 0x%x (%lu)\nDetails:\n", faultAddr,
                                  errorCode, errorCode);
 
                 if (!(errorCode & 1)) Renderer::printf("- Page not present\n");
@@ -128,42 +128,42 @@ static void showException(InterruptFrame* frame, uint64_t intNum, uint64_t error
         case 16:
             {
                 Renderer::printf("Error: Floating-point error.\n");
-                if (errorCode) Renderer::printf("Error Code: 0x%lx (%lu)\n", errorCode, errorCode);
+                if (errorCode) Renderer::printf("Error Code: 0x%x (%lu)\n", errorCode, errorCode);
 
                 break;
             }
         case 17:
             {
                 Renderer::printf("Error: Alignment check.\n");
-                if (errorCode) Renderer::printf("Error Code: 0x%lx (%lu)\n", errorCode, errorCode);
+                if (errorCode) Renderer::printf("Error Code: 0x%x (%lu)\n", errorCode, errorCode);
 
                 break;
             }
         case 18:
             {
                 Renderer::printf("Error: Machine check.\n");
-                if (errorCode) Renderer::printf("Error Code: 0x%lx (%lu)\n", errorCode, errorCode);
+                if (errorCode) Renderer::printf("Error Code: 0x%x (%lu)\n", errorCode, errorCode);
 
                 break;
             }
         case 19:
             {
                 Renderer::printf("Error: SIMD floating-point exception.\n");
-                if (errorCode) Renderer::printf("Error Code: 0x%lx (%lu)\n", errorCode, errorCode);
+                if (errorCode) Renderer::printf("Error Code: 0x%x (%lu)\n", errorCode, errorCode);
 
                 break;
             }
         case 20:
             {
                 Renderer::printf("Error: Virtualization exception.\n");
-                if (errorCode) Renderer::printf("Error Code: 0x%lx (%lu)\n", errorCode, errorCode);
+                if (errorCode) Renderer::printf("Error Code: 0x%x (%lu)\n", errorCode, errorCode);
 
                 break;
             }
         case 21:
             {
                 Renderer::printf("Error: Control protection exception.\n");
-                if (errorCode) Renderer::printf("Error Code: 0x%lx (%lu)\n", errorCode, errorCode);
+                if (errorCode) Renderer::printf("Error Code: 0x%x (%lu)\n", errorCode, errorCode);
 
                 break;
             }
@@ -180,14 +180,14 @@ static void showException(InterruptFrame* frame, uint64_t intNum, uint64_t error
         case 31:
             {
                 Renderer::printf("Error: Reserved exception.\n");
-                if (errorCode) Renderer::printf("Error Code: 0x%lx (%lu)\n", errorCode, errorCode);
+                if (errorCode) Renderer::printf("Error Code: 0x%x (%lu)\n", errorCode, errorCode);
 
                 break;
             }
         default:
             {
                 Renderer::printf("Error: Unknown exception.\n");
-                if (errorCode) Renderer::printf("Error Code: 0x%lx (%lu)\n", errorCode, errorCode);
+                if (errorCode) Renderer::printf("Error Code: 0x%x (%lu)\n", errorCode, errorCode);
 
                 break;
             }
