@@ -1,7 +1,7 @@
 #pragma once
 
-#include <arch/common/spinlock.h>
-#include <core/utils.h>
+#include <kernel/sync/spinlock.h>
+#include <kernel/core/utils.h>
 
 enum class PageFlags : uint64_t
 {

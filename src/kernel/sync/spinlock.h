@@ -1,6 +1,6 @@
 #pragma once
 
-#include <core/utils.h>
+#include <kernel/core/utils.h>
 
 class Spinlock
 {
@@ -13,7 +13,7 @@ public:
     [[nodiscard]] bool isLocked() const;
 
 private:
-    volatile uint8_t locked;
+    uint8_t locked;
 };
 
 class LockGuard
@@ -22,5 +22,16 @@ public:
     explicit LockGuard(Spinlock& l);
     ~LockGuard();
 
+    Spinlock& lock;
+};
+
+class LockGuardIRQ
+{
+public:
+    explicit LockGuardIRQ(Spinlock& l);
+    ~LockGuardIRQ();
+
+private:
+    uint64_t rflags = 0;
     Spinlock& lock;
 };

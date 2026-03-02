@@ -2,7 +2,6 @@
 
 #include <cstdint>
 #include <cstddef>
-#include <climits>
 #include <cstdarg>
 
 enum Color

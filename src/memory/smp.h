@@ -1,8 +1,8 @@
 #pragma once
 
-#include <arch/common/atomic.h>
-#include <arch/common/spinlock.h>
-#include <core/utils.h>
+#include <kernel/sync/atomic.h>
+#include <kernel/sync/spinlock.h>
+#include <kernel/core/utils.h>
 
 struct ApBootInfo
 {
@@ -17,6 +17,7 @@ public:
     static uint32_t getCpuCount();
     static uint32_t getLapicID();
     static uint64_t getKernelStackTop(uint32_t cpuID);
+    static uint64_t getLapicBase();
 
     static constexpr size_t MAX_CPUS = 256, SMP_STACK_SIZE = 8192;
     static constexpr uintptr_t LAPIC_BASE = 0xFEE00000;
@@ -26,5 +27,5 @@ public:
 private:
     static void waitForAPs();
     static Spinlock smpLock;
-    static uint64_t lapicPhysBase, lapicVirtBase;
+    static uint64_t lapicVirtBase;
 };

@@ -19,21 +19,22 @@
 - [x] Bitmap frame allocator
 - [x] Serial (UART) console output
 - [x] Framebuffer text + ANSI color output
+- [x] PCI/ACPI support
+- [x] Keyboard driver (PS/2)
 
 #### Planned
 
-- [ ] Keyboard driver (PS/2, USB)
 - [ ] PIT Timer interrupts
 - [ ] Kernel panic and stack trace
 - [ ] Scheduler
 - [ ] Virtual memory management
 - [ ] Memory protection and COW
+- [ ] USB drivers (keyboard, mouse, etc.)
 
 #### Future
 
 - [ ] ELF loader
 - [ ] Filesystem (FAT32, ext2, etc.)
-- [ ] PCI/ACPI support
 - [ ] Basic network stack (TCP/IP)
 - [ ] IPC/event system
 - [ ] Multitasking

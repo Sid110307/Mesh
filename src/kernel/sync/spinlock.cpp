@@ -1,9 +1,8 @@
-#include <arch/common/spinlock.h>
+#include <kernel/sync/spinlock.h>
 
 Spinlock::Spinlock() : locked(0) {}
 
 void Spinlock::lock() { while (__atomic_test_and_set(&locked, __ATOMIC_ACQUIRE)) asm volatile ("pause"); }
-
 void Spinlock::unlock() { __atomic_clear(&locked, __ATOMIC_RELEASE); }
 
 bool Spinlock::tryLock()
@@ -16,3 +15,15 @@ bool Spinlock::isLocked() const { return __atomic_load_n(&locked, __ATOMIC_RELAX
 
 LockGuard::LockGuard(Spinlock& l) : lock(l) { lock.lock(); }
 LockGuard::~LockGuard() { lock.unlock(); }
+
+LockGuardIRQ::LockGuardIRQ(Spinlock& l) : lock(l)
+{
+    asm volatile ("pushf\npop %0\ncli" : "=r"(rflags) :: "memory");
+    lock.lock();
+}
+
+LockGuardIRQ::~LockGuardIRQ()
+{
+    lock.unlock();
+    asm volatile("pushq %0\npopfq" :: "r"(rflags) : "memory");
+}

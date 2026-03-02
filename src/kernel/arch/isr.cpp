@@ -1,5 +1,7 @@
-#include <arch/x86_64/isr.h>
+#include <kernel/arch/isr.h>
 #include <drivers/video/renderer.h>
+#include <drivers/io/keyboard/keyboard.h>
+#include <memory/lapic.h>
 
 static void showException(InterruptFrame* frame, uint64_t intNum, uint64_t errorCode)
 {
@@ -117,9 +119,9 @@ static void showException(InterruptFrame* frame, uint64_t intNum, uint64_t error
                 if (errorCode & 4) Renderer::printf("- User mode access\n");
                 if (errorCode & 8) Renderer::printf("- Reserved bit violation\n");
                 if (errorCode & 16) Renderer::printf("- Instruction fetch\n");
-                if (errorCode & (1 << 5)) Renderer::printf("- Protection-key violation\n");
-                if (errorCode & (1 << 6)) Renderer::printf("- Shadow stack access violation\n");
-                if (errorCode & (1 << 15)) Renderer::printf("- SGX access violation\n");
+                if (errorCode & 1 << 5) Renderer::printf("- Protection-key violation\n");
+                if (errorCode & 1 << 6) Renderer::printf("- Shadow stack access violation\n");
+                if (errorCode & 1 << 15) Renderer::printf("- SGX access violation\n");
 
                 break;
             }
@@ -199,38 +201,43 @@ static void showException(InterruptFrame* frame, uint64_t intNum, uint64_t error
     while (true) asm volatile ("hlt");
 }
 
-#define ISR_NOERR(n) extern "C" __attribute__((interrupt)) void isr##n(InterruptFrame* frame) { showException(frame, n, 0); }
-#define ISR_ERR(n) extern "C" __attribute__((interrupt)) void isr##n(InterruptFrame* frame, uint64_t error) { showException(frame, n, error); }
+extern "C" {
+__attribute__ ((interrupt)) void isr0(InterruptFrame* frame) { showException(frame, 0, 0); }
+__attribute__ ((interrupt)) void isr1(InterruptFrame* frame) { showException(frame, 1, 0); }
+__attribute__ ((interrupt)) void isr2(InterruptFrame* frame) { showException(frame, 2, 0); }
+__attribute__ ((interrupt)) void isr3(InterruptFrame* frame) { showException(frame, 3, 0); }
+__attribute__ ((interrupt)) void isr4(InterruptFrame* frame) { showException(frame, 4, 0); }
+__attribute__ ((interrupt)) void isr5(InterruptFrame* frame) { showException(frame, 5, 0); }
+__attribute__ ((interrupt)) void isr6(InterruptFrame* frame) { showException(frame, 6, 0); }
+__attribute__ ((interrupt)) void isr7(InterruptFrame* frame) { showException(frame, 7, 0); }
+__attribute__ ((interrupt)) void isr8(InterruptFrame* frame, const uint64_t error) { showException(frame, 8, error); }
+__attribute__ ((interrupt)) void isr9(InterruptFrame* frame) { showException(frame, 9, 0); }
+__attribute__ ((interrupt)) void isr10(InterruptFrame* frame, const uint64_t error) { showException(frame, 10, error); }
+__attribute__ ((interrupt)) void isr11(InterruptFrame* frame, const uint64_t error) { showException(frame, 11, error); }
+__attribute__ ((interrupt)) void isr12(InterruptFrame* frame, const uint64_t error) { showException(frame, 12, error); }
+__attribute__ ((interrupt)) void isr13(InterruptFrame* frame, const uint64_t error) { showException(frame, 13, error); }
+__attribute__ ((interrupt)) void isr14(InterruptFrame* frame, const uint64_t error) { showException(frame, 14, error); }
+__attribute__ ((interrupt)) void isr15(InterruptFrame* frame) { showException(frame, 15, 0); }
+__attribute__ ((interrupt)) void isr16(InterruptFrame* frame) { showException(frame, 16, 0); }
+__attribute__ ((interrupt)) void isr17(InterruptFrame* frame, const uint64_t error) { showException(frame, 17, error); }
+__attribute__ ((interrupt)) void isr18(InterruptFrame* frame) { showException(frame, 18, 0); }
+__attribute__ ((interrupt)) void isr19(InterruptFrame* frame) { showException(frame, 19, 0); }
+__attribute__ ((interrupt)) void isr20(InterruptFrame* frame) { showException(frame, 20, 0); }
+__attribute__ ((interrupt)) void isr21(InterruptFrame* frame) { showException(frame, 21, 0); }
+__attribute__ ((interrupt)) void isr22(InterruptFrame* frame) { showException(frame, 22, 0); }
+__attribute__ ((interrupt)) void isr23(InterruptFrame* frame) { showException(frame, 23, 0); }
+__attribute__ ((interrupt)) void isr24(InterruptFrame* frame) { showException(frame, 24, 0); }
+__attribute__ ((interrupt)) void isr25(InterruptFrame* frame) { showException(frame, 25, 0); }
+__attribute__ ((interrupt)) void isr26(InterruptFrame* frame) { showException(frame, 26, 0); }
+__attribute__ ((interrupt)) void isr27(InterruptFrame* frame) { showException(frame, 27, 0); }
+__attribute__ ((interrupt)) void isr28(InterruptFrame* frame) { showException(frame, 28, 0); }
+__attribute__ ((interrupt)) void isr29(InterruptFrame* frame) { showException(frame, 29, 0); }
+__attribute__ ((interrupt)) void isr30(InterruptFrame* frame) { showException(frame, 30, 0); }
+__attribute__ ((interrupt)) void isr31(InterruptFrame* frame) { showException(frame, 31, 0); }
 
-ISR_NOERR(0)
-ISR_NOERR(1)
-ISR_NOERR(2)
-ISR_NOERR(3)
-ISR_NOERR(4)
-ISR_NOERR(5)
-ISR_NOERR(6)
-ISR_NOERR(7)
-ISR_ERR(8)
-ISR_NOERR(9)
-ISR_ERR(10)
-ISR_ERR(11)
-ISR_ERR(12)
-ISR_ERR(13)
-ISR_ERR(14)
-ISR_NOERR(15)
-ISR_NOERR(16)
-ISR_ERR(17)
-ISR_NOERR(18)
-ISR_NOERR(19)
-ISR_NOERR(20)
-ISR_NOERR(21)
-ISR_NOERR(22)
-ISR_NOERR(23)
-ISR_NOERR(24)
-ISR_NOERR(25)
-ISR_NOERR(26)
-ISR_NOERR(27)
-ISR_NOERR(28)
-ISR_NOERR(29)
-ISR_NOERR(30)
-ISR_NOERR(31)
+__attribute__ ((interrupt)) void isrKeyboard(InterruptFrame*)
+{
+    Keyboard::irq();
+    LAPIC::sendEOI();
+}
+}

@@ -72,7 +72,7 @@ endforeach ()
 add_custom_target(embedded_assets ALL DEPENDS ${EMBED_ASSET_OBJS})
 add_executable(mesh.elf ${ASM_NASM_SRC} ${C_SRC} ${CPP_SRC} ${EMBED_ASSET_OBJS})
 add_dependencies(mesh.elf embedded_assets)
-set_source_files_properties(src/arch/x86_64/isr.cpp PROPERTIES COMPILE_FLAGS "-mno-sse -mno-sse2 -mno-mmx -mno-80387")
+set_source_files_properties(src/kernel/arch/isr.cpp PROPERTIES COMPILE_FLAGS "-mno-sse -mno-sse2 -mno-mmx -mno-80387")
 
 add_custom_command(
     OUTPUT ${OUT_DIR}/Mesh.iso

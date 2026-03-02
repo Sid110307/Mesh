@@ -1,4 +1,5 @@
-#include <core/utils.h>
+#include <kernel/core/utils.h>
+#include <climits>
 
 uint8_t inb(uint16_t port)
 {
@@ -80,11 +81,11 @@ char* strtok_r(char* str, const char* delim, char** savePtr)
 
     char* tokenStart = nullptr;
 
-    while (**savePtr && strchr(delim, **savePtr)) ++(*savePtr);
+    while (**savePtr && strchr(delim, **savePtr)) ++*savePtr;
     if (**savePtr == '\0') return nullptr;
 
     tokenStart = *savePtr;
-    while (**savePtr && !strchr(delim, **savePtr)) ++(*savePtr);
+    while (**savePtr && !strchr(delim, **savePtr)) ++*savePtr;
 
     if (**savePtr)
     {

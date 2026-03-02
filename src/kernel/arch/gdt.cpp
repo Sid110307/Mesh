@@ -1,7 +1,7 @@
-#include <arch/x86_64/gdt.h>
+#include <kernel/arch/gdt.h>
 #include <memory/smp.h>
-#include <core/utils.h>
-#include <boot/limine.h>
+#include <kernel/core/utils.h>
+#include <kernel/boot/limine.h>
 
 extern limine_hhdm_request hhdm_request;
 
@@ -9,12 +9,12 @@ static constexpr uint16_t GDT_NULL = 0, GDT_CODE = 1, GDT_DATA = 2, GDT_TSS = 3;
 static constexpr size_t TSS_ENTRIES = SMP::MAX_CPUS * 2, BASE_ENTRIES = 5, GDT_ENTRIES = BASE_ENTRIES + TSS_ENTRIES;
 
 extern "C" {
-GDTEntry gdt[GDT_ENTRIES] __attribute__((aligned(8))) = {};
+GDTEntry gdt[GDT_ENTRIES] __attribute__ ((aligned(8))) = {};
 GDTPointer gdtPointer = {};
 }
 
-static uint8_t istStacks[SMP::MAX_CPUS][7][8192] __attribute__((aligned(16)));
-TSS kernelTSS[SMP::MAX_CPUS] __attribute__((aligned(16)));
+static uint8_t istStacks[SMP::MAX_CPUS][7][8192] __attribute__ ((aligned(16)));
+TSS kernelTSS[SMP::MAX_CPUS] __attribute__ ((aligned(16)));
 
 GDTManager::GDTManager()
 {
@@ -53,7 +53,7 @@ void GDTManager::setTSS(const size_t cpuIndex, const uint64_t rsp0)
     const size_t gdtIndex = GDT_TSS + cpuIndex * 2;
     setEntry(gdtIndex, base & 0xFFFFFFFF, sizeof(TSS) - 1, 0x89, 0x00);
 
-    const uint64_t tssBaseHigh = (base >> 32) & 0xFFFFFFFF;
+    const uint64_t tssBaseHigh = base >> 32 & 0xFFFFFFFF;
     memcpy(&gdt[gdtIndex + 1], &tssBaseHigh, sizeof(uint32_t));
     memset(reinterpret_cast<char*>(&gdt[gdtIndex + 1]) + sizeof(uint32_t), 0, sizeof(uint32_t));
 }
@@ -68,8 +68,8 @@ void GDTManager::setEntry(const uint16_t index, const uint32_t base, const uint3
 {
     gdt[index].limitLow = limit & 0xFFFF;
     gdt[index].baseLow = base & 0xFFFF;
-    gdt[index].baseMid = (base >> 16) & 0xFF;
+    gdt[index].baseMid = base >> 16 & 0xFF;
     gdt[index].access = access;
-    gdt[index].flagsLimitHigh = ((limit >> 16) & 0x0F) | (flags & 0xF0);
+    gdt[index].flagsLimitHigh = (limit >> 16 & 0x0F) | (flags & 0xF0);
     gdt[index].baseHigh = (base >> 24) & 0xFF;
 }

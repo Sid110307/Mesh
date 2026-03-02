@@ -1,6 +1,6 @@
 #pragma once
 
-#include <core/utils.h>
+#include <kernel/core/utils.h>
 
 struct __attribute__ ((packed)) GDTEntry
 {

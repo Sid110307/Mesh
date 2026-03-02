@@ -1,9 +1,14 @@
 #include <drivers/video/renderer.h>
-#include <arch/x86_64/gdt.h>
-#include <arch/x86_64/idt.h>
+#include <drivers/io/keyboard/keyboard.h>
+
+#include <kernel/arch/gdt.h>
+#include <kernel/arch/idt.h>
+#include <kernel/arch/isr.h>
+#include <kernel/arch/acpi.h>
 #include <memory/paging.h>
 #include <memory/smp.h>
-#include <boot/limine.h>
+#include <memory/lapic.h>
+#include <kernel/boot/limine.h>
 
 extern limine_framebuffer_request framebuffer_request;
 extern limine_memmap_request memory_request;
@@ -63,6 +68,7 @@ void initIDT()
 {
     Renderer::printf("\x1b[36mInitializing IDT... ");
     IDTManager::init();
+    IDTManager::setEntry(0x21, reinterpret_cast<void(*)()>(isrKeyboard), 0x8E, 0);
     IDTManager::load();
     Renderer::printf("\x1b[32mDone!\n");
 }
@@ -82,9 +88,9 @@ void initAPIC()
     uint32_t low, high;
     asm volatile ("rdmsr" : "=a"(low), "=d"(high) : "c"(0x1B));
 
-    uint64_t apicBase = (static_cast<uint64_t>(high) << 32) | low;;
-    bool apic = apicBase & (1ULL << 11);
-    bool x2apic = apicBase & (1ULL << 10);
+    uint64_t apicBase = static_cast<uint64_t>(high) << 32 | low;
+    bool apic = apicBase & 1ULL << 11;
+    bool x2apic = apicBase & 1ULL << 10;
 
     if (apic)
     {
@@ -93,6 +99,25 @@ void initAPIC()
         Renderer::printf("\n");
     }
     else Renderer::printf("\x1b[31mDisabled\x1b[0m\n");
+}
+
+void initIOAPIC()
+{
+    Renderer::printf("\x1b[36mInitializing IOAPIC... ");
+
+    ACPI::MADTInfo madt = {};
+    if (!ACPI::init(madt))
+    {
+        Renderer::printf("\x1b[31mFailed to initialize ACPI/MADT\x1b[0m\n");
+        return;
+    }
+
+    IOAPIC::init(madt.ioapicPhys + hhdm_request.response->offset, madt.ioApicGlobalIrqBase);
+    IOAPIC::redirect(madt.hasIso ? madt.irq1GlobalIrqBase : 1, 0x21,
+                     static_cast<uint8_t>(smp_request.response->bsp_lapic_id), madt.irq1ActiveLow,
+                     madt.irq1LevelTriggered);
+
+    Renderer::printf("\x1b[32mDone!\x1b[0m\n");
 }
 
 extern "C" [[noreturn]] void kernelMain()
@@ -105,6 +130,14 @@ extern "C" [[noreturn]] void kernelMain()
     initIDT();
     initAPIC();
     SMP::init();
+    LAPIC::init(SMP::getLapicBase());
+    initIOAPIC();
+    Keyboard::init();
 
-    while (true) asm volatile ("hlt");
+    asm volatile ("sti");
+    while (true)
+    {
+        while (char c = Keyboard::readChar()) Renderer::printf("%c", c);
+        asm volatile ("hlt");
+    }
 }

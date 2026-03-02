@@ -1,6 +1,6 @@
 #pragma once
 
-#include <core/utils.h>
+#include <kernel/core/utils.h>
 
 class alignas(4) Atomic
 {
@@ -13,5 +13,5 @@ public:
     bool compareExchange(uint32_t& expected, uint32_t desired) noexcept;
 
 private:
-    volatile uint32_t value;
+    uint32_t value;
 };

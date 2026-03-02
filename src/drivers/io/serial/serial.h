@@ -1,7 +1,7 @@
 #pragma once
 
-#include <arch/common/spinlock.h>
-#include <core/utils.h>
+#include <kernel/sync/spinlock.h>
+#include <kernel/core/utils.h>
 
 class Serial
 {
