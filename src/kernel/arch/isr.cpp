@@ -1,6 +1,7 @@
 #include <kernel/arch/isr.h>
 #include <drivers/video/renderer.h>
 #include <drivers/io/keyboard/keyboard.h>
+#include <drivers/io/serial/serial.h>
 #include <memory/lapic.h>
 
 static void showException(InterruptFrame* frame, uint64_t intNum, uint64_t errorCode)

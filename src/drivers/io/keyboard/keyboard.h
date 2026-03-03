@@ -67,7 +67,7 @@ private:
 
     struct DecodeState
     {
-        bool prefixE0 = false, prefixE1 = false, prefixSet2 = false;
+        bool prefixE0 = false, prefixE1 = false;
         uint8_t pauseBuffer[8] = {}, pauseLength = 0, printScreenBuffer[4] = {}, printScreenLength = 0;
     };
 
@@ -86,7 +86,7 @@ private:
     static uint8_t readData();
 
     static void setLeds(bool capsLock, bool numLock, bool scrollLock);
-    static bool sendKeyboardCommand(uint8_t cmd, uint8_t data = 0);
+    static bool sendKeyboardCommand(uint8_t cmd, bool hasData, uint8_t data = 0);
 
     static void decodeByte(uint8_t scancode, Event& outEvent, bool& produced);
     static Key mapKey(uint8_t makeCode, bool prefixE0);

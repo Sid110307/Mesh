@@ -80,25 +80,19 @@ void Paging::init()
     uint64_t kernelSize = _kernel_end - _kernel_start;
 
     for (uint64_t offset = 0; offset < kernelSize; offset += FrameAllocator::SMALL_SIZE)
-    {
-        uint64_t phys = kernelPhysStart + offset, virt = kernelVirtStart + offset;
-
-        if (!mapSmall(phys, phys, PageFlags::PRESENT | PageFlags::RW | PageFlags::GLOBAL))
+        if (!mapSmall(kernelVirtStart + offset, kernelPhysStart + offset,
+                      PageFlags::PRESENT | PageFlags::RW | PageFlags::GLOBAL))
         {
-            Serial::printf("Paging: Failed to map kernel page at 0x%lx to 0x%lx.\n", phys, virt);
+            Serial::printf("Paging: Failed to map kernel page at 0x%lx to 0x%lx.\n", kernelVirtStart + offset,
+                           kernelPhysStart + offset);
             while (true) asm volatile ("hlt");
         }
-        if (!mapSmall(virt, phys, PageFlags::PRESENT | PageFlags::RW | PageFlags::GLOBAL))
-        {
-            Serial::printf("Paging: Failed to map kernel page at 0x%lx to 0x%lx.\n", virt, phys);
-            while (true) asm volatile ("hlt");
-        }
-    }
 
     if (framebuffer_request.response && framebuffer_request.response->framebuffer_count > 0)
     {
         auto* fb = framebuffer_request.response->framebuffers[0];
-        auto fbBase = reinterpret_cast<uintptr_t>(fb->address);
+        auto fbBase = reinterpret_cast<uintptr_t>(
+            fb->address);
         uint64_t fbSize = fb->pitch * fb->height;
 
         for (uint64_t addr = fbBase; addr < fbBase + fbSize; addr += FrameAllocator::SMALL_SIZE)
@@ -137,9 +131,10 @@ void Paging::init()
     asm volatile ("mov %%cr4, %0" : "=r"(cr4));
     cr4 |= 1ULL << 7;
     asm volatile ("mov %0, %%cr4" :: "r"(cr4) : "memory");
-    uint32_t eax, edx;
-    asm volatile ("mov $0xC0000080, %%ecx\nrdmsr\nor $(1 << 11), %%eax\nwrmsr\n" : "=a"(eax), "=d"(edx) :: "ecx",
-        "memory");
+    uint32_t lo, hi;
+    asm volatile ("rdmsr" : "=a"(lo), "=d"(hi) : "c"(0xC0000080));
+    lo |= 1u << 11;
+    asm volatile ("wrmsr" :: "a"(lo), "d"(hi), "c"(0xC0000080));
     uint64_t cr0;
     asm volatile ("mov %%cr0, %0" : "=r"(cr0));
     cr0 |= 1 << 31 | 1 << 16;

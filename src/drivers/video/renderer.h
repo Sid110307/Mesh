@@ -44,7 +44,7 @@ public:
 
 private:
     static void ansiPutChar(char c);
-    inline static void drawGlyph(uint32_t px, uint32_t py, char c, uint32_t fg, uint32_t bg);
+    static inline void drawGlyph(uint32_t px, uint32_t py, char c, uint32_t fg, uint32_t bg);
     static inline bool fbReady();
 
     static void clearUnlocked(uint32_t color);
@@ -54,10 +54,10 @@ private:
     static void printDecUnlocked(uint64_t value, uint32_t fg = ansiFg, uint32_t bg = ansiBg);
     static void scrollUnlocked();
 
-    inline static bool serialPrint = false;
-    inline static uint64_t fbWidth = 0, fbHeight = 0, fbPitch = 0;
-    inline static uint32_t* fbAddress = nullptr;
-    inline static uint32_t ansiFg = WHITE, ansiBg = BLACK, cursorX = 0, cursorY = 0, tabWidth = 4;
-    inline static Font font;
+    static inline bool serialPrint = false;
+    static inline uint64_t fbWidth = 0, fbHeight = 0, fbPitch = 0;
+    static inline uint32_t* fbAddress = nullptr;
+    static inline uint32_t ansiFg = WHITE, ansiBg = BLACK, cursorX = 0, cursorY = 0, tabWidth = 4;
+    static inline Font font;
     static Spinlock renderLock;
 };

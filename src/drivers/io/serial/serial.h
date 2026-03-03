@@ -20,7 +20,7 @@ private:
     static void printHexUnlocked(uint64_t value);
     static void printDecUnlocked(uint64_t value);
 
-    inline static uint16_t port = 0x3F8;
-    inline static bool initialized = false;
+    static inline uint16_t port = 0x3F8;
+    static inline bool initialized = false;
     static Spinlock serialLock;
 };

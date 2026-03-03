@@ -13,7 +13,7 @@ public:
         bool irq1ActiveLow = false, irq1LevelTriggered = false;
     };
 
-    struct __attribute__((packed)) RSDP
+    struct __attribute__ ((packed)) RSDP
     {
         char signature[8];
         uint8_t checksum;
@@ -24,7 +24,7 @@ public:
         uint8_t extChecksum, reserved[3];
     };
 
-    struct __attribute__((packed)) SDTHeader
+    struct __attribute__ ((packed)) SDTHeader
     {
         char signature[4];
         uint32_t length;
@@ -51,7 +51,7 @@ public:
         uint32_t ioapicAddr, globalIrqBase;
     };
 
-    struct __attribute__((packed)) MADT_ISO
+    struct __attribute__ ((packed)) MADT_ISO
     {
         MADTEntryHeader header;
         uint8_t bus, source;

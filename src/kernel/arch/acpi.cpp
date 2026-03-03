@@ -14,8 +14,7 @@ static bool signaturesMatch(const char* sig1, const char* sig2, const size_t len
 static ACPI::SDTHeader* findTable(ACPI::SDTHeader* sdt, const char signature[4])
 {
     const bool isXSDT = signaturesMatch(sdt->signature, "XSDT", 4);
-    const bool isRSDT = signaturesMatch(sdt->signature, "RSDT", 4);
-    if (!isXSDT && !isRSDT) return nullptr;
+    if (!isXSDT && !signaturesMatch(sdt->signature, "RSDT", 4)) return nullptr;
 
     const auto* base = reinterpret_cast<uint8_t*>(sdt) + sizeof(ACPI::SDTHeader);
     for (uint64_t i = 0; i < (sdt->length - sizeof(ACPI::SDTHeader)) / (isXSDT ? 8 : 4); ++i)
@@ -92,11 +91,13 @@ bool ACPI::init(MADTInfo& madtInfo)
         }
         else if (entryHeader->type == 2 && entryHeader->length >= sizeof(MADT_ISO))
         {
-            auto* isoEntry = reinterpret_cast<const MADT_ISO*>(start);
-            madtInfo.hasIso = true;
-            madtInfo.irq1GlobalIrqBase = isoEntry->globalIrq;
-            madtInfo.irq1ActiveLow = (isoEntry->flags & 0x3) == 3;
-            madtInfo.irq1LevelTriggered = ((isoEntry->flags >> 2) & 0x3) == 3;
+            if (auto* isoEntry = reinterpret_cast<const MADT_ISO*>(start); isoEntry->bus == 0 && isoEntry->source == 1)
+            {
+                madtInfo.hasIso = true;
+                madtInfo.irq1GlobalIrqBase = isoEntry->globalIrq;
+                madtInfo.irq1ActiveLow = (isoEntry->flags & 0x3) == 3;
+                madtInfo.irq1LevelTriggered = ((isoEntry->flags >> 2) & 0x3) == 3;
+            }
         }
 
         start += entryHeader->length;

@@ -27,7 +27,10 @@ void Keyboard::init()
     writeCommand(0xAE);
 
     currentModifiers = {false, false, false, false, false, false, false};
+    sendKeyboardCommand(0xF5, false);
     setLeds(currentModifiers.capsLock, currentModifiers.numLock, currentModifiers.scrollLock);
+    sendKeyboardCommand(0xF4, false);
+
     initialized = true;
 }
 
@@ -110,21 +113,13 @@ bool Keyboard::waitOutputSet(int timeout)
 
 void Keyboard::writeCommand(const uint8_t cmd)
 {
-    if (!waitInputClear())
-    {
-        Serial::printf("Keyboard: Timeout waiting for input buffer to clear when writing 0x%x\n", cmd);
-        return;
-    }
+    if (!waitInputClear()) return;
     outb(STATUS_PORT, cmd);
 }
 
 void Keyboard::writeData(const uint8_t data)
 {
-    if (!waitInputClear())
-    {
-        Serial::printf("Keyboard: Timeout waiting for input buffer to clear when writing data 0x%x\n", data);
-        return;
-    }
+    if (!waitInputClear()) return;
     outb(DATA_PORT, data);
 }
 
@@ -137,29 +132,26 @@ void Keyboard::setLeds(const bool capsLock, const bool numLock, const bool scrol
     if (numLock) ledState |= 1 << 1;
     if (scrollLock) ledState |= 1 << 0;
 
-    if (!sendKeyboardCommand(0xED, ledState))
+    if (!sendKeyboardCommand(0xED, true, ledState))
         Serial::printf("Keyboard: Failed to set LEDs (CapsLock: %d, NumLock: %d, ScrollLock: %d)\n", capsLock, numLock,
                        scrollLock);
 }
 
-bool Keyboard::sendKeyboardCommand(const uint8_t cmd, const uint8_t data)
+bool Keyboard::sendKeyboardCommand(const uint8_t cmd, const bool hasData, const uint8_t data)
 {
     for (int attempt = 0; attempt < 3; ++attempt)
     {
-        uint8_t resp = 0;
         writeData(cmd);
-        if (!waitOutputSet())
-        {
-            Serial::printf("Keyboard: Timeout waiting for output buffer to be set after sending 0x%x\n", cmd);
-            continue;
-        }
-        resp = readData();
+        if (!waitOutputSet()) continue;
+
+        uint8_t resp = readData();
         if (resp == 0xFE) continue;
         if (resp != 0xFA)
         {
             Serial::printf("Keyboard: Unexpected response 0x%x after sending 0x%x\n", resp, cmd);
             return false;
         }
+        if (!hasData) return true;
 
         writeData(data);
         if (!waitOutputSet())
@@ -168,6 +160,7 @@ bool Keyboard::sendKeyboardCommand(const uint8_t cmd, const uint8_t data)
                            data, cmd);
             continue;
         }
+
         resp = readData();
         if (resp == 0xFE) continue;
         if (resp == 0xFA) return true;

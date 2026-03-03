@@ -122,6 +122,9 @@ void initIOAPIC()
                      static_cast<uint8_t>(mp_request.response->bsp_lapic_id), madt.irq1ActiveLow,
                      madt.irq1LevelTriggered);
 
+    outb(0x21, 0xFF);
+    outb(0xA1, 0xFF);
+
     Renderer::printf("\x1b[32mDone!\x1b[0m\n");
 }
 
