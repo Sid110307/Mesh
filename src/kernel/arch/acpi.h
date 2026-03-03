@@ -5,12 +5,16 @@
 class ACPI
 {
 public:
+    struct Iso
+    {
+        uint32_t globalIrq = 0;
+        bool present = false, activeLow = false, levelTriggered = false;
+    };
+
     struct MADTInfo
     {
         uint64_t ioapicPhys = 0, ioapicGlobalIrqBase = 0;
-        bool hasIso = false;
-        uint32_t irq1GlobalIrqBase = 1;
-        bool irq1ActiveLow = false, irq1LevelTriggered = false;
+        Iso iso[16] = {};
     };
 
     struct __attribute__ ((packed)) RSDP
@@ -60,4 +64,5 @@ public:
     };
 
     static bool init(MADTInfo& madtInfo);
+    static void resolveIsa(const MADTInfo& madtInfo, uint8_t src, uint32_t& globalIrq, bool& activeLow, bool& levelTriggered);
 };

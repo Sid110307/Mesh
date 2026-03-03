@@ -1,5 +1,6 @@
 #include <drivers/video/renderer.h>
 #include <drivers/io/keyboard/keyboard.h>
+#include <drivers/io/pit/pit.h>
 
 #include <kernel/arch/gdt.h>
 #include <kernel/arch/idt.h>
@@ -38,10 +39,6 @@ void initSIMD()
     asm volatile("mov %0, %%cr4" :: "r"(cr4));
 
     asm volatile("fninit");
-    Renderer::printf("\x1b[36mCPU Features: \x1b[32m%s%s%s%s%s%s\x1b[0m\n", SMP::cpuFeatures.hasSSE ? "SSE " : "",
-                     SMP::cpuFeatures.hasSSE2 ? "SSE2 " : "", SMP::cpuFeatures.hasSSE3 ? "SSE3 " : "",
-                     SMP::cpuFeatures.hasSSE4_1 ? "SSE4.1 " : "", SMP::cpuFeatures.hasSSE4_2 ? "SSE4.2 " : "",
-                     SMP::cpuFeatures.hasAVX ? "AVX " : "");
 }
 
 void initRenderer()
@@ -77,6 +74,11 @@ void dumpStats()
         Renderer::printf("\x1b[36m[Boot Time] \x1b[96m%lu\x1b[0m\n", date_at_boot_request.response->timestamp);
     if (mp_request.response && mp_request.response->cpu_count > 0)
         Renderer::printf("\x1b[36m[SMP] \x1b[96m%u CPUs Detected\x1b[0m\n", mp_request.response->cpu_count);
+
+    Renderer::printf("\x1b[36m[CPU Features] \x1b[32m%s%s%s%s%s%s\x1b[0m\n", SMP::cpuFeatures.hasSSE ? "SSE " : "",
+                     SMP::cpuFeatures.hasSSE2 ? "SSE2 " : "", SMP::cpuFeatures.hasSSE3 ? "SSE3 " : "",
+                     SMP::cpuFeatures.hasSSE4_1 ? "SSE4.1 " : "", SMP::cpuFeatures.hasSSE4_2 ? "SSE4.2 " : "",
+                     SMP::cpuFeatures.hasAVX ? "AVX " : "");
 }
 
 void initGDT()
@@ -95,6 +97,7 @@ void initIDT()
 {
     Renderer::printf("\x1b[36mInitializing IDT... ");
     IDTManager::init();
+    IDTManager::setEntry(0x20, reinterpret_cast<void(*)()>(isrTimer), 0x8E, 0);
     IDTManager::setEntry(0x21, reinterpret_cast<void(*)()>(isrKeyboard), 0x8E, 0);
     IDTManager::load();
     Renderer::printf("\x1b[32mDone!\n");
@@ -129,9 +132,14 @@ void initIOAPIC()
     }
 
     IOAPIC::init(ioapicVirt, madt.ioapicGlobalIrqBase);
-    IOAPIC::redirect(madt.hasIso ? madt.irq1GlobalIrqBase : 1, 0x21,
-                     static_cast<uint8_t>(mp_request.response->bsp_lapic_id), madt.irq1ActiveLow,
-                     madt.irq1LevelTriggered);
+    const auto lapicId = static_cast<uint8_t>(mp_request.response->bsp_lapic_id);
+    uint32_t globalIrq;
+    bool activeLow, levelTriggered;
+
+    ACPI::resolveIsa(madt, 0, globalIrq, activeLow, levelTriggered);
+    IOAPIC::redirect(globalIrq, 0x20, lapicId, activeLow, levelTriggered);
+    ACPI::resolveIsa(madt, 1, globalIrq, activeLow, levelTriggered);
+    IOAPIC::redirect(globalIrq, 0x21, lapicId, activeLow, levelTriggered);
 
     outb(0x21, 0xFF);
     outb(0xA1, 0xFF);
@@ -145,18 +153,29 @@ extern "C" [[noreturn]] void kernelMain()
     initSIMD();
     Renderer::setSerialPrint(true);
     dumpStats();
+
     initPaging();
     initGDT();
     initIDT();
     SMP::init();
     LAPIC::init(SMP::getLapicBase());
+
     initIOAPIC();
     Keyboard::init();
+    PIT::init(1000);
 
     asm volatile ("sti");
     while (true)
     {
         while (char c = Keyboard::readChar()) Renderer::printf("%c", c);
+
+        static uint64_t last = 0;
+        if (uint64_t now = PIT::getTicks(); now - last >= 1000)
+        {
+            last = now;
+            Renderer::printf("\x1b[90m.\x1b[0m");
+        }
+
         asm volatile ("hlt");
     }
 }

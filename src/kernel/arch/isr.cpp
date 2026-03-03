@@ -1,7 +1,7 @@
 #include <kernel/arch/isr.h>
 #include <drivers/video/renderer.h>
 #include <drivers/io/keyboard/keyboard.h>
-#include <drivers/io/serial/serial.h>
+#include <drivers/io/pit/pit.h>
 #include <memory/lapic.h>
 
 static void showException(InterruptFrame* frame, uint64_t intNum, uint64_t errorCode)
@@ -239,6 +239,12 @@ __attribute__ ((interrupt)) void isr31(InterruptFrame* frame) { showException(fr
 __attribute__ ((interrupt)) void isrKeyboard(InterruptFrame*)
 {
     Keyboard::irq();
+    LAPIC::sendEOI();
+}
+
+__attribute__ ((interrupt)) void isrTimer(InterruptFrame*)
+{
+    PIT::irq();
     LAPIC::sendEOI();
 }
 }

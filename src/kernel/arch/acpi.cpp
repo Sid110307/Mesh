@@ -90,15 +90,13 @@ bool ACPI::init(MADTInfo& madtInfo)
             madtInfo.ioapicGlobalIrqBase = ioapicEntry->globalIrqBase;
         }
         else if (entryHeader->type == 2 && entryHeader->length >= sizeof(MADT_ISO))
-        {
-            if (auto* isoEntry = reinterpret_cast<const MADT_ISO*>(start); isoEntry->bus == 0 && isoEntry->source == 1)
+            if (auto* isoEntry = reinterpret_cast<const MADT_ISO*>(start); isoEntry->bus == 0 && isoEntry->source < 16)
             {
-                madtInfo.hasIso = true;
-                madtInfo.irq1GlobalIrqBase = isoEntry->globalIrq;
-                madtInfo.irq1ActiveLow = (isoEntry->flags & 0x3) == 3;
-                madtInfo.irq1LevelTriggered = ((isoEntry->flags >> 2) & 0x3) == 3;
+                madtInfo.iso[isoEntry->source].present = true;
+                madtInfo.iso[isoEntry->source].globalIrq = isoEntry->globalIrq;
+                madtInfo.iso[isoEntry->source].activeLow = (isoEntry->flags & 0x3) == 3;
+                madtInfo.iso[isoEntry->source].levelTriggered = ((isoEntry->flags >> 2) & 0x3) == 3;
             }
-        }
 
         start += entryHeader->length;
     }
@@ -109,4 +107,21 @@ bool ACPI::init(MADTInfo& madtInfo)
         return false;
     }
     return true;
+}
+
+void ACPI::resolveIsa(const MADTInfo& madtInfo, const uint8_t src, uint32_t& globalIrq, bool& activeLow,
+                      bool& levelTriggered)
+{
+    if (src < 16 && madtInfo.iso[src].present)
+    {
+        globalIrq = madtInfo.iso[src].globalIrq;
+        activeLow = madtInfo.iso[src].activeLow;
+        levelTriggered = madtInfo.iso[src].levelTriggered;
+    }
+    else
+    {
+        globalIrq = src;
+        activeLow = false;
+        levelTriggered = false;
+    }
 }

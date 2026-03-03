@@ -42,4 +42,5 @@ __attribute__ ((interrupt)) void isr30(InterruptFrame* frame);
 __attribute__ ((interrupt)) void isr31(InterruptFrame* frame);
 
 __attribute__ ((interrupt)) void isrKeyboard(InterruptFrame* frame);
+__attribute__ ((interrupt)) void isrTimer(InterruptFrame* frame);
 }

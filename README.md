@@ -23,11 +23,11 @@
 - [x] Serial (UART) console output
 - [x] Framebuffer text + ANSI color output
 - [x] Keyboard driver (PS/2)
+- [x] PIT interrupts (timer and sleep functions)
 
 #### Planned
 
 - [ ] Mouse driver (PS/2)
-- [ ] PIT Timer interrupts (timer and sleep functions)
 - [ ] Kernel panic and stack trace
 - [ ] Kernel heap allocator
 - [ ] Virtual memory management
