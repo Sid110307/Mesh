@@ -7,11 +7,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - name: Install dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y nasm cmake qemu-system-x86 xorriso binutils
-          git clone --branch v10.x-binary https://github.com/limine-bootloader/limine.git --depth=1
-          sudo make -C limine && cd limine && sudo make install
+        run: ./limine.sh
       - name: Configure CMake
         run: cmake -S ${{ github.workspace }} -B bin
       - name: Build

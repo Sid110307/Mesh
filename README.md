@@ -61,10 +61,7 @@ $ sudo make install
 ```
 
 ```bash
-$ git clone --branch=v10.x-binary https://github.com/limine-bootloader/limine.git limine-binary
-$ cd limine-binary
-$ make
-$ sudo make install
+$ ./limine.sh
 ```
 
 ## Quick Start
