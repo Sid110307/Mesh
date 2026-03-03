@@ -11,13 +11,14 @@ extern limine_mp_request mp_request;
 
 extern "C" void trampoline();
 Spinlock SMP::smpLock;
+ApBootInfo SMP::apBoot[MAX_CPUS] = {};
+uint32_t SMP::apCount = 0;
 
 alignas(4096) static uint8_t kernelStacks[SMP::MAX_CPUS][SMP::SMP_STACK_SIZE];
 alignas(4096) static uint8_t apStacks[SMP::MAX_CPUS][SMP::SMP_STACK_SIZE];
-static ApBootInfo apBoot[SMP::MAX_CPUS] = {};
-static uint32_t apCount = 0;
 
 Atomic SMP::apReadyCount{0};
+CPUFeatures SMP::cpuFeatures = {};
 uint32_t SMP::cpuCount = 0, cpuIDs[SMP::MAX_CPUS] = {};
 uint64_t SMP::lapicPhysBase = 0, SMP::lapicVirtBase = 0;
 
@@ -89,6 +90,19 @@ void SMP::init()
 
     cpuCount = logicalID;
     waitForAPs();
+}
+
+void SMP::detectCPUFeatures()
+{
+    uint32_t eax, ebx, ecx, edx;
+    asm volatile ("cpuid" : "=a"(eax), "=b"(ebx), "=c"(ecx), "=d"(edx) : "a"(1));
+
+    cpuFeatures.hasSSE = edx & (1 << 25);
+    cpuFeatures.hasSSE2 = edx & (1 << 26);
+    cpuFeatures.hasSSE3 = ecx & (1 << 0);
+    cpuFeatures.hasSSE4_1 = ecx & (1 << 19);
+    cpuFeatures.hasSSE4_2 = ecx & (1 << 20);
+    cpuFeatures.hasAVX = ecx & (1 << 27);
 }
 
 uint32_t SMP::getCpuCount() { return cpuCount; }

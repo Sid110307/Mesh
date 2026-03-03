@@ -17,13 +17,20 @@ extern limine_executable_address_request executable_addr_request;
 extern limine_mp_request mp_request;
 extern limine_date_at_boot_request date_at_boot_request;
 
-void initSSE()
+void initSIMD()
 {
+    SMP::detectCPUFeatures();
+    if (!SMP::cpuFeatures.hasSSE)
+    {
+        Renderer::printf("\x1b[31mCPU does not support SSE.\x1b[0m\n");
+        return;
+    }
+
     uint64_t cr0, cr4;
 
     asm volatile("mov %%cr0, %0" : "=r"(cr0));
     cr0 &= ~(1ULL << 2);
-    cr0 |= 1ULL << 1;
+    cr0 |= (1ULL << 1) | (1ULL << 5);
     asm volatile("mov %0, %%cr0" :: "r"(cr0));
 
     asm volatile("mov %%cr4, %0" : "=r"(cr4));
@@ -31,6 +38,10 @@ void initSSE()
     asm volatile("mov %0, %%cr4" :: "r"(cr4));
 
     asm volatile("fninit");
+    Renderer::printf("\x1b[36mCPU Features: \x1b[32m%s%s%s%s%s%s\x1b[0m\n", SMP::cpuFeatures.hasSSE ? "SSE " : "",
+                     SMP::cpuFeatures.hasSSE2 ? "SSE2 " : "", SMP::cpuFeatures.hasSSE3 ? "SSE3 " : "",
+                     SMP::cpuFeatures.hasSSE4_1 ? "SSE4.1 " : "", SMP::cpuFeatures.hasSSE4_2 ? "SSE4.2 " : "",
+                     SMP::cpuFeatures.hasAVX ? "AVX " : "");
 }
 
 void initRenderer()
@@ -130,8 +141,8 @@ void initIOAPIC()
 
 extern "C" [[noreturn]] void kernelMain()
 {
-    initSSE();
     initRenderer();
+    initSIMD();
     Renderer::setSerialPrint(true);
     dumpStats();
     initPaging();

@@ -8,43 +8,58 @@
 
 - [x] x86_64 architecture
 - [x] Limine bootloader
+- [x] UEFI and BIOS support
+- [x] SSE/SSE2 support
 - [x] SMP and AP boot
-- [x] GDT, per-CPU TSS, and IST
-- [x] IDT with exceptions and interrupts
-- [x] LAPIC and APIC support
+- [x] GDT
+- [x] Per-CPU TSS and IST stacks
+- [x] IDT with exceptions and IRQ handlers
+- [x] APIC, LAPIC, and IOAPIC support
+- [x] PCI/ACPI support with RSDP/RSDT/XSDT parsing
+- [x] 4-level paging (4KB/2MB/1GB)
+- [x] Bitmap frame allocator
 - [x] Spinlock
 - [x] Atomic operations
-- [x] 4-level paging (4KB/2MB/1GB)
-- [x] Thread-safe page map/unmap
-- [x] Bitmap frame allocator
 - [x] Serial (UART) console output
 - [x] Framebuffer text + ANSI color output
-- [x] PCI/ACPI support
 - [x] Keyboard driver (PS/2)
 
 #### Planned
 
-- [ ] PIT Timer interrupts
+- [ ] Mouse driver (PS/2)
+- [ ] PIT Timer interrupts (timer and sleep functions)
 - [ ] Kernel panic and stack trace
-- [ ] Scheduler
+- [ ] Kernel heap allocator
 - [ ] Virtual memory management
+- [ ] Per-CPU data structures
+- [ ] Scheduler
+- [ ] Context switching
+- [ ] Userspace syscall interface
+- [ ] Per-process virtual address spaces
 - [ ] Memory protection and COW
-- [ ] USB drivers (keyboard, mouse, etc.)
 
 #### Future
 
 - [ ] ELF loader
+- [ ] VFS layer
 - [ ] Filesystem (FAT32, ext2, etc.)
-- [ ] Basic network stack (TCP/IP)
-- [ ] IPC/event system
-- [ ] Multitasking
-- [ ] Userspace
+- [ ] PCI enumeration and drivers
+- [ ] Storage drivers (AHCI, NVMe, etc.)
+- [ ] USB drivers
+- [ ] Better terminal (scrolling, cursor, line editing, etc.)
+- [ ] Framebuffer graphics primitives (2D drawing, mouse cursor, etc.)
+- [ ] Window compositor
+- [ ] Networking (TCP/IP stack, Ethernet drivers, etc.)
+- [ ] IPC event system
+- [ ] SMP task scheduling and load balancing
+- [ ] Power management (ACPI S3 sleep, etc.)
+- [ ] RTC/CMOS clock support
 
 ## Requirements
 
 - [NASM](https://www.nasm.us/)
 - A C++ compiler ([GCC](https://gcc.gnu.org/), [Clang](https://clang.llvm.org/), etc.)
-- [LD](https://www.gnu.org/software/binutils/)
+- [Binutils](https://www.gnu.org/software/binutils/)
 - [Limine](https://limine-bootloader.org/)
 - [CMake](https://cmake.org/)
 - [QEMU](https://www.qemu.org/) (optional)
