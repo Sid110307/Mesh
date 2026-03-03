@@ -4,7 +4,7 @@
 #include <drivers/io/pit/pit.h>
 #include <memory/lapic.h>
 
-static void showException(InterruptFrame* frame, uint64_t intNum, uint64_t errorCode)
+void showException(InterruptFrame* frame, uint64_t intNum, uint64_t errorCode)
 {
     Renderer::setSerialPrint(true);
     Renderer::printf("\x1b[31m\nException Raised: %lu\n", intNum);

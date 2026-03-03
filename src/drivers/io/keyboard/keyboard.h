@@ -1,11 +1,9 @@
 #pragma once
 
-#include <kernel/sync/spinlock.h>
 #include <kernel/core/utils.h>
 
-class Keyboard
+namespace Keyboard
 {
-public:
     enum class Key : uint16_t
     {
         NONE = 0,
@@ -46,52 +44,11 @@ public:
         char ascii = 0;
     };
 
-    static void init();
-    static void irq();
+    void init();
+    void irq();
 
-    static bool readEvent(Event& event);
-    static char readChar();
-    static Modifiers getModifiers();
-    static void clear();
-
-    static constexpr uint16_t DATA_PORT = 0x60, STATUS_PORT = 0x64;
-    static constexpr uint8_t STATUS_OUTPUT_BUFFER = 1 << 0, STATUS_INPUT_BUFFER = 1 << 1;
-    static constexpr size_t QUEUE_SIZE = 256;
-
-private:
-    struct Queue
-    {
-        Event events[QUEUE_SIZE] = {};
-        size_t head = 0, tail = 0, count = 0;
-    };
-
-    struct DecodeState
-    {
-        bool prefixE0 = false, prefixE1 = false;
-        uint8_t pauseBuffer[8] = {}, pauseLength = 0, printScreenBuffer[4] = {}, printScreenLength = 0;
-    };
-
-    static bool initialized;
-    static Spinlock lock;
-    static Queue eventQueue;
-    static Modifiers currentModifiers;
-    static DecodeState decodeState;
-
-    static bool consumeByte();
-    static bool waitInputClear(int timeout = 100000);
-    static bool waitOutputSet(int timeout = 100000);
-
-    static void writeCommand(uint8_t cmd);
-    static void writeData(uint8_t data);
-    static uint8_t readData();
-
-    static void setLeds(bool capsLock, bool numLock, bool scrollLock);
-    static bool sendKeyboardCommand(uint8_t cmd, bool hasData, uint8_t data = 0);
-
-    static void decodeByte(uint8_t scancode, Event& outEvent, bool& produced);
-    static Key mapKey(uint8_t makeCode, bool prefixE0);
-    static char mapAscii(Key key, const Modifiers& modifiers);
-
-    static void applyModifiers(const Event& event);
-    static void pushEvent(const Event& event);
-};
+    bool readEvent(Event& event);
+    char readChar();
+    Modifiers getModifiers();
+    void clear();
+}

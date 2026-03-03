@@ -39,8 +39,8 @@ char* utoa(uint64_t value, char* buffer, const size_t bufferSize, const uint8_t 
 {
     if (!buffer || bufferSize < 2 || base < 2 || base > 36) return nullptr;
 
-    static constexpr auto digitsLower = "0123456789abcdefghijklmnopqrstuvwxyz";
-    static constexpr auto digitsUpper = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    constexpr auto digitsLower = "0123456789abcdefghijklmnopqrstuvwxyz",
+                   digitsUpper = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
     const char* digits = uppercase ? digitsUpper : digitsLower;
 
     size_t index = bufferSize;

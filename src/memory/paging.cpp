@@ -1,5 +1,4 @@
 #include <memory/paging.h>
-#include <memory/smp.h>
 #include <drivers/io/serial/serial.h>
 #include <kernel/boot/limine.h>
 
@@ -9,17 +8,10 @@ extern limine_hhdm_request hhdm_request;
 extern limine_executable_address_request executable_addr_request;
 extern uint8_t _kernel_start[], _kernel_end[];
 
-Spinlock Paging::pagingLock;
-Spinlock FrameAllocator::frameAllocatorLock;
+Spinlock pagingLock, frameAllocatorLock;
+uint64_t memoryBase = 0, memorySize = 0, totalFrames = 0, usedFrames = 0, *bitmap = nullptr, *pml4 = nullptr;
 
-static uint64_t memoryBase = 0;
-static uint64_t memorySize = 0;
-static uint64_t totalFrames = 0;
-static uint64_t usedFrames = 0;
-static uint64_t* bitmap = nullptr;
-uint64_t* pml4 = nullptr;
-
-static uint64_t* createPageTable()
+uint64_t* createPageTable()
 {
     void* frame = FrameAllocator::alloc();
     if (!frame) return nullptr;
@@ -30,15 +22,15 @@ static uint64_t* createPageTable()
     return address;
 }
 
-static uint64_t* ensureTable(uint64_t* parent, const uint16_t index, const PageFlags flags)
+uint64_t* ensureTable(uint64_t* parent, const uint16_t index, const PageFlags flags)
 {
     if (parent[index] & static_cast<uint64_t>(PageFlags::HUGE))
     {
         Serial::printf("Paging: Cannot ensure table at index %u because parent entry is a huge page.\n", index);
         return nullptr;
     }
-    const uint64_t want = static_cast<uint64_t>(PageFlags::PRESENT) | (static_cast<uint64_t>(flags) & (static_cast<
-        uint64_t>(PageFlags::RW) | static_cast<uint64_t>(PageFlags::USER)));
+    const uint64_t want = static_cast<uint64_t>(PageFlags::PRESENT) | (static_cast<uint64_t>(flags) &
+        (static_cast<uint64_t>(PageFlags::RW) | static_cast<uint64_t>(PageFlags::USER)));
 
     if (!(parent[index] & static_cast<uint64_t>(PageFlags::PRESENT)))
     {
@@ -46,21 +38,21 @@ static uint64_t* ensureTable(uint64_t* parent, const uint16_t index, const PageF
         if (!newTable) return nullptr;
 
         const uint64_t phys = reinterpret_cast<uint64_t>(newTable) - hhdm_request.response->offset;
-        parent[index] = phys | (static_cast<uint64_t>(PageFlags::PRESENT) | (static_cast<uint64_t>(flags) & (static_cast
-            <uint64_t>(PageFlags::RW) | static_cast<uint64_t>(PageFlags::USER))));
+        parent[index] = phys | (static_cast<uint64_t>(PageFlags::PRESENT) | (static_cast<uint64_t>(flags) &
+            (static_cast<uint64_t>(PageFlags::RW) | static_cast<uint64_t>(PageFlags::USER))));
     }
     else parent[index] |= want & (static_cast<uint64_t>(PageFlags::RW) | static_cast<uint64_t>(PageFlags::USER));
 
     return reinterpret_cast<uint64_t*>(hhdm_request.response->offset + (parent[index] & ~0xFFFULL));
 }
 
-static bool tableEmpty(const uint64_t* table)
+bool tableEmpty(const uint64_t* table)
 {
     for (int i = 0; i < 512; ++i) if (table[i] & static_cast<uint64_t>(PageFlags::PRESENT)) return false;
     return true;
 }
 
-static void freeTable(uint64_t* parent, const uint16_t index)
+void freeTable(uint64_t* parent, const uint16_t index)
 {
     FrameAllocator::free(reinterpret_cast<void*>(parent[index] & ~0xFFFULL));
     parent[index] = 0;
@@ -282,7 +274,7 @@ void FrameAllocator::init()
     for (size_t i = 0; i < memmap_request.response->entry_count; ++i)
     {
         const auto* entry = memmap_request.response->entries[i];
-        if (entry->type != LIMINE_MEMMAP_USABLE || entry->base < BIOS_START) continue;
+        if (entry->type != LIMINE_MEMMAP_USABLE || entry->base < 0x100000) continue;
         if (entry->length > bestSize)
         {
             bestBase = entry->base;
@@ -350,8 +342,13 @@ void FrameAllocator::free(void* frame)
     if (phys < memoryBase || phys >= memoryBase + memorySize || (phys - memoryBase) % SMALL_SIZE != 0) return;
 
     const uint64_t index = (phys - memoryBase) / SMALL_SIZE;
-    bitmap[index / 64] &= ~(1ULL << (index % 64));
-    --usedFrames;
+    auto& word = bitmap[index / 64];
+
+    if (const uint64_t mask = 1ULL << (index % 64); word & mask)
+    {
+        word &= ~mask;
+        --usedFrames;
+    }
 }
 
 void FrameAllocator::reserve(void* frame)
@@ -360,8 +357,13 @@ void FrameAllocator::reserve(void* frame)
     if (phys < memoryBase || phys >= memoryBase + memorySize || (phys - memoryBase) % SMALL_SIZE != 0) return;
 
     const uint64_t index = (phys - memoryBase) / SMALL_SIZE;
-    bitmap[index / 64] |= 1ULL << (index % 64);
-    ++usedFrames;
+    auto& word = bitmap[index / 64];
+
+    if (const uint64_t mask = 1ULL << (index % 64); !(word & mask))
+    {
+        word |= mask;
+        ++usedFrames;
+    }
 }
 
 bool FrameAllocator::used(void* frame)

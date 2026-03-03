@@ -1,10 +1,45 @@
 #include <drivers/io/serial/serial.h>
+#include <kernel/sync/spinlock.h>
 
-Spinlock Serial::serialLock;
+uint16_t port = 0x3F8;
+bool serialInitialized = false;
+Spinlock serialLock;
+
+void printCharUnlocked(const uint8_t c)
+{
+    int timeout = 1000000;
+    while (!(inb(port + 5) & 0x20) && timeout--) asm volatile ("pause");
+
+    outb(port, c);
+}
+
+void printUnlocked(const char* str)
+{
+    if (!serialInitialized) Serial::init();
+    if (!str)
+    {
+        printUnlocked("Serial: Invalid string.\n");
+        return;
+    }
+
+    for (size_t i = 0; str[i] != '\0'; ++i) printCharUnlocked(static_cast<uint8_t>(str[i]));
+}
+
+void printHexUnlocked(const uint64_t value)
+{
+    char buffer[33];
+    for (const char* p = utoa(value, buffer, sizeof(buffer), 16); *p; ++p) printCharUnlocked(*p);
+}
+
+void printDecUnlocked(const uint64_t value)
+{
+    char buffer[33];
+    for (const char* p = utoa(value, buffer, sizeof(buffer)); *p; ++p) printCharUnlocked(*p);
+}
 
 void Serial::init()
 {
-    if (initialized) return;
+    if (serialInitialized) return;
 
     outb(port + 1, 0x00);
     outb(port + 3, 0x80);
@@ -14,14 +49,14 @@ void Serial::init()
     outb(port + 2, 0xC7);
     outb(port + 4, 0x0B);
 
-    initialized = true;
+    serialInitialized = true;
 }
 
 void Serial::printf(const char* fmt, ...)
 {
     LockGuard guard(serialLock);
 
-    if (!initialized) init();
+    if (!serialInitialized) init();
     if (!fmt || !*fmt)
     {
         printUnlocked("Serial: Invalid format string.\n");
@@ -39,7 +74,7 @@ void Serial::printChar(const uint8_t c)
 {
     LockGuard guard(serialLock);
 
-    if (!initialized) init();
+    if (!serialInitialized) init();
     printCharUnlocked(c);
 }
 
@@ -59,36 +94,4 @@ void Serial::printDec(const uint64_t value)
 {
     LockGuard guard(serialLock);
     printDecUnlocked(value);
-}
-
-void Serial::printCharUnlocked(const uint8_t c)
-{
-    int timeout = 1000000;
-    while (!(inb(port + 5) & 0x20) && timeout--) asm volatile ("pause");
-
-    outb(port, c);
-}
-
-void Serial::printUnlocked(const char* str)
-{
-    if (!initialized) init();
-    if (!str)
-    {
-        printUnlocked("Serial: Invalid string.\n");
-        return;
-    }
-
-    for (size_t i = 0; str[i] != '\0'; ++i) printCharUnlocked(static_cast<uint8_t>(str[i]));
-}
-
-void Serial::printHexUnlocked(const uint64_t value)
-{
-    char buffer[33];
-    for (const char* p = utoa(value, buffer, sizeof(buffer), 16); *p; ++p) printCharUnlocked(*p);
-}
-
-void Serial::printDecUnlocked(const uint64_t value)
-{
-    char buffer[33];
-    for (const char* p = utoa(value, buffer, sizeof(buffer)); *p; ++p) printCharUnlocked(*p);
 }

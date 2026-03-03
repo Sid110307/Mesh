@@ -21,7 +21,7 @@ extern limine_date_at_boot_request date_at_boot_request;
 void initSIMD()
 {
     SMP::detectCPUFeatures();
-    if (!SMP::cpuFeatures.hasSSE)
+    if (!SMP::getCPUFeatures().hasSSE)
     {
         Renderer::printf("\x1b[31mCPU does not support SSE.\x1b[0m\n");
         return;
@@ -75,17 +75,18 @@ void dumpStats()
     if (mp_request.response && mp_request.response->cpu_count > 0)
         Renderer::printf("\x1b[36m[SMP] \x1b[96m%u CPUs Detected\x1b[0m\n", mp_request.response->cpu_count);
 
-    Renderer::printf("\x1b[36m[CPU Features] \x1b[32m%s%s%s%s%s%s\x1b[0m\n", SMP::cpuFeatures.hasSSE ? "SSE " : "",
-                     SMP::cpuFeatures.hasSSE2 ? "SSE2 " : "", SMP::cpuFeatures.hasSSE3 ? "SSE3 " : "",
-                     SMP::cpuFeatures.hasSSE4_1 ? "SSE4.1 " : "", SMP::cpuFeatures.hasSSE4_2 ? "SSE4.2 " : "",
-                     SMP::cpuFeatures.hasAVX ? "AVX " : "");
+    const auto cpuFeatures = SMP::getCPUFeatures();
+    Renderer::printf("\x1b[36m[CPU Features] \x1b[32m%s%s%s%s%s%s\x1b[0m\n", cpuFeatures.hasSSE ? "SSE " : "",
+                     cpuFeatures.hasSSE2 ? "SSE2 " : "", cpuFeatures.hasSSE3 ? "SSE3 " : "",
+                     cpuFeatures.hasSSE4_1 ? "SSE4.1 " : "", cpuFeatures.hasSSE4_2 ? "SSE4.2 " : "",
+                     cpuFeatures.hasAVX ? "AVX " : "");
 }
 
 void initGDT()
 {
     Renderer::printf("\x1b[36mInitializing GDT... ");
 
-    [[maybe_unused]] GDTManager gdtManager;
+    GDTManager::init();
     GDTManager::load();
     GDTManager::setTSS(0, SMP::getKernelStackTop(0));
     GDTManager::loadTR(0);

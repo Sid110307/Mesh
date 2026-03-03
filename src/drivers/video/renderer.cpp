@@ -1,10 +1,233 @@
 #include <drivers/video/renderer.h>
 #include <drivers/io/serial/serial.h>
 #include <kernel/boot/limine.h>
+#include <kernel/sync/spinlock.h>
+
+struct __attribute__ ((packed)) PSF1Header
+{
+    uint8_t magic[2], mode, charSize;
+};
 
 extern limine_framebuffer_request framebuffer_request;
 extern uint8_t asset_src_assets_fonts_zap_ext_light18_psf_start[];
-Spinlock Renderer::renderLock;
+
+bool serialPrint = false;
+uint64_t fbWidth = 0, fbHeight = 0, fbPitch = 0;
+uint32_t* fbAddress = nullptr;
+uint32_t ansiFg = WHITE, ansiBg = BLACK, cursorX = 0, cursorY = 0, tabWidth = 4;
+Font font;
+Spinlock renderLock;
+
+bool fbReady()
+{
+    return fbAddress && font.glyphBuffer && font.width > 0 && font.height > 0 && fbWidth > 0 && fbHeight > 0 && fbPitch
+        > 0;
+}
+
+void drawGlyph(const uint32_t px, const uint32_t py, const char c, const uint32_t fg,
+               const uint32_t bg)
+{
+    if (!fbReady())
+    {
+        Serial::printf("Renderer: Cannot draw glyph, framebuffer or font not initialized.\n");
+        return;
+    }
+    if (font.height == 0 || font.width == 0 || static_cast<uint8_t>(c) >= font.glyphCount || px +
+        font.width > fbWidth || py + font.height > fbHeight)
+    {
+        Serial::printf("Renderer: Invalid glyph or position for drawing.\n");
+        return;
+    }
+
+    const uint8_t* glyph = font.glyphBuffer + static_cast<uint8_t>(c) * font.height;
+    for (uint32_t y = 0; y < font.height && py + y < fbHeight; ++y)
+        for (uint32_t x = 0; x < font.width && px + x < fbWidth; ++x)
+            fbAddress[(py + y) * (fbPitch / 4) + (px + x)] = glyph[y] & 1 << (7 - x) ? fg : bg;
+}
+
+void clearUnlocked(const uint32_t color)
+{
+    if (!fbReady())
+    {
+        Serial::printf("Renderer: Cannot clear, framebuffer not initialized.\n");
+        return;
+    }
+
+    for (size_t i = 0; i < fbPitch / 4 * fbHeight; ++i) fbAddress[i] = color;
+    cursorX = cursorY = 0;
+}
+
+void scrollUnlocked()
+{
+    if (!fbReady())
+    {
+        Serial::printf("Renderer: Cannot scroll, framebuffer or font not initialized.\n");
+        return;
+    }
+    const size_t bytesPerLine = fbPitch, scrollBytes = (fbHeight - font.height) * bytesPerLine;
+
+    memmove(fbAddress, reinterpret_cast<uint8_t*>(fbAddress) + bytesPerLine, scrollBytes);
+    memset(reinterpret_cast<uint8_t*>(fbAddress) + scrollBytes, 0, font.height * bytesPerLine);
+}
+
+void printCharUnlocked(const char c, const uint32_t fg = ansiFg, const uint32_t bg = ansiBg)
+{
+    if (!fbReady())
+    {
+        Serial::printf("Renderer: Cannot print character, framebuffer not initialized.\n");
+        return;
+    }
+
+    if (c == '\n')
+    {
+        cursorX = 0;
+        ++cursorY;
+
+        if (serialPrint) Serial::printf("\n");
+        return;
+    }
+    if (c == '\r')
+    {
+        cursorX = 0;
+        if (serialPrint) Serial::printf("\r");
+
+        return;
+    }
+    if (c == '\t')
+    {
+        cursorX = (cursorX + tabWidth) & ~(tabWidth - 1);
+        if (cursorX >= fbWidth / font.width)
+        {
+            cursorX = 0;
+            ++cursorY;
+        }
+        if (cursorY >= fbHeight / font.height)
+        {
+            scrollUnlocked();
+            cursorY--;
+        }
+
+        if (serialPrint) Serial::printf("\t");
+        return;
+    }
+
+    if (cursorX >= fbWidth / font.width)
+    {
+        cursorX = 0;
+        ++cursorY;
+    }
+    if (cursorY >= fbHeight / font.height)
+    {
+        scrollUnlocked();
+        cursorY--;
+    }
+
+    drawGlyph(cursorX * font.width, cursorY * font.height, c, fg, bg);
+    ++cursorX;
+
+    if (serialPrint) Serial::printf("%c", c);
+}
+
+void printUnlocked(const char* str, const uint32_t fg = ansiFg, const uint32_t bg = ansiBg)
+{
+    if (!fbReady())
+    {
+        Serial::printf("Renderer: Cannot print, framebuffer not initialized.\n");
+        return;
+    }
+    if (!str)
+    {
+        Serial::printf("Renderer: Invalid string.\n");
+        return;
+    }
+
+    uint32_t fgColor = fg, bgColor = bg;
+    bool inEscape = false;
+    char escBuf[16];
+    int escLen = 0;
+
+    for (const char* p = str; *p; ++p)
+    {
+        const char c = *p;
+
+        if (inEscape)
+        {
+            if (c == 'm')
+            {
+                escBuf[escLen] = '\0';
+                if (escLen > 0 && escBuf[0] == '[') Renderer::escapeAnsi(escBuf + 1, fgColor, bgColor, fg, bg);
+                inEscape = false;
+                escLen = 0;
+
+                continue;
+            }
+            if (escLen + 1 < static_cast<int>(sizeof(escBuf))) escBuf[escLen++] = c;
+
+            continue;
+        }
+        if (c == '\x1B')
+        {
+            inEscape = true;
+            escLen = 0;
+
+            continue;
+        }
+
+        printCharUnlocked(c, fgColor, bgColor);
+    }
+}
+
+void printHexUnlocked(const uint64_t value, const uint32_t fg = ansiFg, const uint32_t bg = ansiBg)
+{
+    char buffer[33];
+    printUnlocked(utoa(value, buffer, sizeof(buffer), 16), fg, bg);
+}
+
+void printDecUnlocked(const uint64_t value, const uint32_t fg = ansiFg, const uint32_t bg = ansiBg)
+{
+    char buffer[33];
+    printUnlocked(utoa(value, buffer, sizeof(buffer)), fg, bg);
+}
+
+void ansiPutChar(const char c)
+{
+    static bool inEscape = false;
+    static char escBuf[16];
+    static size_t escLen = 0;
+
+    if (inEscape)
+    {
+        if (escLen < sizeof(escBuf) - 1)
+            escBuf[escLen++] = c;
+
+        if (c == 'm')
+        {
+            escBuf[escLen] = '\0';
+            if (escBuf[0] == '[') Renderer::escapeAnsi(escBuf + 1, ansiFg, ansiBg, WHITE, BLACK);
+
+            inEscape = false;
+            escLen = 0;
+        }
+        else if (escLen >= sizeof(escBuf) - 1)
+        {
+            Serial::printf("Renderer: ANSI escape sequence too long: %s\n", escBuf);
+
+            inEscape = false;
+            escLen = 0;
+        }
+
+        return;
+    }
+
+    if (c == '\x1B')
+    {
+        inEscape = true;
+        escLen = 0;
+        return;
+    }
+
+    printCharUnlocked(c, ansiFg, ansiBg);
+}
 
 void Renderer::init()
 {
@@ -204,13 +427,14 @@ void Renderer::printf(const char* fmt, ...)
     va_end(args);
 }
 
-void Renderer::printChar(const char c, const uint32_t fg, const uint32_t bg)
+void Renderer::printChar(const char c, const uint32_t fg = ansiFg, const uint32_t bg = ansiBg)
 {
     LockGuard guard(renderLock);
     printCharUnlocked(c, fg, bg);
 }
 
-void Renderer::printCharAt(const uint32_t x, const uint32_t y, const char c, const uint32_t fg, const uint32_t bg)
+void Renderer::printCharAt(const uint32_t x, const uint32_t y, const char c, const uint32_t fg = ansiFg,
+                           const uint32_t bg = ansiBg)
 {
     LockGuard guard(renderLock);
     if (!fbReady() || c == '\n' || c == '\r' || c == '\t')
@@ -228,19 +452,20 @@ void Renderer::printCharAt(const uint32_t x, const uint32_t y, const char c, con
     if (serialPrint) Serial::printf("%c", c);
 }
 
-void Renderer::print(const char* str, const uint32_t fg, const uint32_t bg)
+void Renderer::print(const char* str, const uint32_t fg = ansiFg, const uint32_t bg = ansiBg)
 {
     LockGuard guard(renderLock);
     printUnlocked(str, fg, bg);
 }
 
-void Renderer::printAt(const uint32_t x, const uint32_t y, const char* str, const uint32_t fg, const uint32_t bg)
+void Renderer::printAt(const uint32_t x, const uint32_t y, const char* str, const uint32_t fg = ansiFg,
+                       const uint32_t bg = ansiBg)
 {
     setCursor(x, y);
     print(str, fg, bg);
 }
 
-void Renderer::printHex(const uint64_t value, const uint32_t fg, const uint32_t bg)
+void Renderer::printHex(const uint64_t value, const uint32_t fg = ansiFg, const uint32_t bg = ansiBg)
 {
     char buffer[33];
     print(utoa(value, buffer, sizeof(buffer), 16), fg, bg);
@@ -253,7 +478,7 @@ void Renderer::printHexAt(const uint32_t x, const uint32_t y, const uint64_t val
     printHex(value, fg, bg);
 }
 
-void Renderer::printDec(const uint64_t value, const uint32_t fg, const uint32_t bg)
+void Renderer::printDec(const uint64_t value, const uint32_t fg = ansiFg, const uint32_t bg = ansiBg)
 {
     char buffer[33];
     print(utoa(value, buffer, sizeof(buffer)), fg, bg);
@@ -279,214 +504,3 @@ uint32_t Renderer::getFontHeight() { return font.height; }
 
 bool Renderer::getSerialPrint() { return serialPrint; }
 void Renderer::setSerialPrint(const bool value) { serialPrint = value; }
-
-void Renderer::ansiPutChar(const char c)
-{
-    static bool inEscape = false;
-    static char escBuf[16];
-    static size_t escLen = 0;
-
-    if (inEscape)
-    {
-        if (escLen < sizeof(escBuf) - 1)
-            escBuf[escLen++] = c;
-
-        if (c == 'm')
-        {
-            escBuf[escLen] = '\0';
-            if (escBuf[0] == '[') escapeAnsi(escBuf + 1, ansiFg, ansiBg, WHITE, BLACK);
-
-            inEscape = false;
-            escLen = 0;
-        }
-        else if (escLen >= sizeof(escBuf) - 1)
-        {
-            Serial::printf("Renderer: ANSI escape sequence too long: %s\n", escBuf);
-
-            inEscape = false;
-            escLen = 0;
-        }
-
-        return;
-    }
-
-    if (c == '\x1B')
-    {
-        inEscape = true;
-        escLen = 0;
-        return;
-    }
-
-    printCharUnlocked(c, ansiFg, ansiBg);
-}
-
-inline void Renderer::drawGlyph(const uint32_t px, const uint32_t py, const char c, const uint32_t fg,
-                                const uint32_t bg)
-{
-    if (!fbReady())
-    {
-        Serial::printf("Renderer: Cannot draw glyph, framebuffer or font not initialized.\n");
-        return;
-    }
-    if (font.height == 0 || font.width == 0 || static_cast<uint8_t>(c) >= font.glyphCount || px +
-        font.width > fbWidth || py + font.height > fbHeight)
-    {
-        Serial::printf("Renderer: Invalid glyph or position for drawing.\n");
-        return;
-    }
-
-    const uint8_t* glyph = font.glyphBuffer + static_cast<uint8_t>(c) * font.height;
-    for (uint32_t y = 0; y < font.height && py + y < fbHeight; ++y)
-        for (uint32_t x = 0; x < font.width && px + x < fbWidth; ++x)
-            fbAddress[(py + y) * (fbPitch / 4) + (px + x)] = glyph[y] & 1 << (7 - x) ? fg : bg;
-}
-
-inline bool Renderer::fbReady()
-{
-    return fbAddress && font.glyphBuffer && font.width > 0 && font.height > 0 && fbWidth > 0 && fbHeight > 0 && fbPitch
-        > 0;
-}
-
-void Renderer::clearUnlocked(const uint32_t color)
-{
-    if (!fbReady())
-    {
-        Serial::printf("Renderer: Cannot clear, framebuffer not initialized.\n");
-        return;
-    }
-
-    for (size_t i = 0; i < fbPitch / 4 * fbHeight; ++i) fbAddress[i] = color;
-    cursorX = cursorY = 0;
-}
-
-void Renderer::printCharUnlocked(const char c, const uint32_t fg, const uint32_t bg)
-{
-    if (!fbReady())
-    {
-        Serial::printf("Renderer: Cannot print character, framebuffer not initialized.\n");
-        return;
-    }
-
-    if (c == '\n')
-    {
-        cursorX = 0;
-        ++cursorY;
-
-        if (serialPrint) Serial::printf("\n");
-        return;
-    }
-    if (c == '\r')
-    {
-        cursorX = 0;
-        if (serialPrint) Serial::printf("\r");
-
-        return;
-    }
-    if (c == '\t')
-    {
-        cursorX = (cursorX + tabWidth) & ~(tabWidth - 1);
-        if (cursorX >= fbWidth / font.width)
-        {
-            cursorX = 0;
-            ++cursorY;
-        }
-        if (cursorY >= fbHeight / font.height)
-        {
-            scrollUnlocked();
-            cursorY--;
-        }
-
-        if (serialPrint) Serial::printf("\t");
-        return;
-    }
-
-    if (cursorX >= fbWidth / font.width)
-    {
-        cursorX = 0;
-        ++cursorY;
-    }
-    if (cursorY >= fbHeight / font.height)
-    {
-        scrollUnlocked();
-        cursorY--;
-    }
-
-    drawGlyph(cursorX * font.width, cursorY * font.height, c, fg, bg);
-    ++cursorX;
-
-    if (serialPrint) Serial::printf("%c", c);
-}
-
-void Renderer::printUnlocked(const char* str, const uint32_t fg, const uint32_t bg)
-{
-    if (!fbReady())
-    {
-        Serial::printf("Renderer: Cannot print, framebuffer not initialized.\n");
-        return;
-    }
-    if (!str)
-    {
-        Serial::printf("Renderer: Invalid string.\n");
-        return;
-    }
-
-    uint32_t fgColor = fg, bgColor = bg;
-    bool inEscape = false;
-    char escBuf[16];
-    int escLen = 0;
-
-    for (const char* p = str; *p; ++p)
-    {
-        const char c = *p;
-
-        if (inEscape)
-        {
-            if (c == 'm')
-            {
-                escBuf[escLen] = '\0';
-                if (escLen > 0 && escBuf[0] == '[') escapeAnsi(escBuf + 1, fgColor, bgColor, fg, bg);
-                inEscape = false;
-                escLen = 0;
-
-                continue;
-            }
-            if (escLen + 1 < static_cast<int>(sizeof(escBuf))) escBuf[escLen++] = c;
-
-            continue;
-        }
-        if (c == '\x1B')
-        {
-            inEscape = true;
-            escLen = 0;
-
-            continue;
-        }
-
-        printCharUnlocked(c, fgColor, bgColor);
-    }
-}
-
-void Renderer::printHexUnlocked(const uint64_t value, const uint32_t fg, const uint32_t bg)
-{
-    char buffer[33];
-    printUnlocked(utoa(value, buffer, sizeof(buffer), 16), fg, bg);
-}
-
-void Renderer::printDecUnlocked(const uint64_t value, const uint32_t fg, const uint32_t bg)
-{
-    char buffer[33];
-    printUnlocked(utoa(value, buffer, sizeof(buffer)), fg, bg);
-}
-
-void Renderer::scrollUnlocked()
-{
-    if (!fbReady())
-    {
-        Serial::printf("Renderer: Cannot scroll, framebuffer or font not initialized.\n");
-        return;
-    }
-    const size_t bytesPerLine = fbPitch, scrollBytes = (fbHeight - font.height) * bytesPerLine;
-
-    memmove(fbAddress, reinterpret_cast<uint8_t*>(fbAddress) + bytesPerLine, scrollBytes);
-    memset(reinterpret_cast<uint8_t*>(fbAddress) + scrollBytes, 0, font.height * bytesPerLine);
-}

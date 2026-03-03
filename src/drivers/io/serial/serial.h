@@ -1,26 +1,14 @@
 #pragma once
 
-#include <kernel/sync/spinlock.h>
 #include <kernel/core/utils.h>
 
-class Serial
+namespace Serial
 {
-public:
-    static void init();
-    static void printf(const char* fmt, ...);
+    void init();
+    void printf(const char* fmt, ...);
 
-    static void printChar(uint8_t c);
-    static void print(const char* str);
-    static void printHex(uint64_t value);
-    static void printDec(uint64_t value);
-
-private:
-    static void printCharUnlocked(uint8_t c);
-    static void printUnlocked(const char* str);
-    static void printHexUnlocked(uint64_t value);
-    static void printDecUnlocked(uint64_t value);
-
-    static inline uint16_t port = 0x3F8;
-    static inline bool initialized = false;
-    static Spinlock serialLock;
-};
+    void printChar(uint8_t c);
+    void print(const char* str);
+    void printHex(uint64_t value);
+    void printDec(uint64_t value);
+}

@@ -3,31 +3,38 @@
 #include <drivers/video/renderer.h>
 #include <kernel/arch/gdt.h>
 #include <kernel/arch/idt.h>
+#include <kernel/sync/atomic.h>
+#include <kernel/sync/spinlock.h>
 #include <kernel/boot/limine.h>
+
+struct ApBootInfo
+{
+    uint64_t stackTop;
+    uint32_t cpuID;
+};
 
 extern limine_hhdm_request hhdm_request;
 extern limine_executable_address_request executable_addr_request;
 extern limine_mp_request mp_request;
-
 extern "C" void trampoline();
-Spinlock SMP::smpLock;
-ApBootInfo SMP::apBoot[MAX_CPUS] = {};
-uint32_t SMP::apCount = 0;
 
 alignas(4096) static uint8_t kernelStacks[SMP::MAX_CPUS][SMP::SMP_STACK_SIZE];
 alignas(4096) static uint8_t apStacks[SMP::MAX_CPUS][SMP::SMP_STACK_SIZE];
 
-Atomic SMP::apReadyCount{0};
-CPUFeatures SMP::cpuFeatures = {};
-uint32_t SMP::cpuCount = 0, cpuIDs[SMP::MAX_CPUS] = {};
-uint64_t SMP::lapicPhysBase = 0, SMP::lapicVirtBase = 0;
+Spinlock smpLock;
+ApBootInfo apBoot[SMP::MAX_CPUS] = {};
+uint32_t apCount = 0;
+Atomic apReadyCount{0};
+SMP::CPUFeatures cpuFeatures = {};
+uint32_t cpuCount = 0, cpuIDs[SMP::MAX_CPUS] = {};
+uint64_t lapicPhysBase = 0, lapicVirtBase = 0;
 
 extern "C" [[noreturn]] void apMain(uint32_t cpuID)
 {
     GDTManager::load();
     IDTManager::load();
     GDTManager::loadTR(cpuID);
-    SMP::apReadyCount.increment();
+    apReadyCount.increment();
 
     asm volatile ("sti");
     while (true) asm volatile ("hlt");
@@ -89,7 +96,18 @@ void SMP::init()
     }
 
     cpuCount = logicalID;
-    waitForAPs();
+    uint32_t expectedAPs = apCount;
+
+    int timeout = 1000000;
+    while (apReadyCount.load() < expectedAPs && timeout--) asm volatile ("pause");
+
+    if (timeout <= 0)
+    {
+        Renderer::printf("\x1b[31mTimeout waiting for APs! Using %u cores instead of %u.\x1b[0m\n",
+                         apReadyCount.load() + 1, cpuCount);
+        cpuCount = apReadyCount.load() + 1;
+    }
+    else Renderer::printf("\x1b[32mAll %u cores online!\x1b[0m\n", cpuCount);
 }
 
 void SMP::detectCPUFeatures()
@@ -131,18 +149,4 @@ uint64_t SMP::getKernelStackTop(const uint32_t cpuID)
 }
 
 uint64_t SMP::getLapicBase() { return lapicVirtBase; }
-
-void SMP::waitForAPs()
-{
-    int timeout = 1000000;
-    uint32_t expectedAPs = apCount;
-    while (apReadyCount.load() < expectedAPs && timeout--) asm volatile ("pause");
-
-    if (timeout <= 0)
-    {
-        Renderer::printf("\x1b[31mTimeout waiting for APs! Using %u cores instead of %u.\x1b[0m\n",
-                         apReadyCount.load() + 1, cpuCount);
-        cpuCount = apReadyCount.load() + 1;
-    }
-    else Renderer::printf("\x1b[32mAll %u cores online!\x1b[0m\n", cpuCount);
-}
+SMP::CPUFeatures SMP::getCPUFeatures() { return cpuFeatures; }

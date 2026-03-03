@@ -2,29 +2,75 @@
 #include <kernel/boot/limine.h>
 #include <drivers/io/serial/serial.h>
 
+struct __attribute__ ((packed)) RSDP
+{
+    char signature[8];
+    uint8_t checksum;
+    char oemId[6];
+    uint8_t revision;
+    uint32_t rsdtAddress, length;
+    uint64_t xsdtAddress;
+    uint8_t extChecksum, reserved[3];
+};
+
+struct __attribute__ ((packed)) SDTHeader
+{
+    char signature[4];
+    uint32_t length;
+    uint8_t revision, checksum;
+    char oemId[6], oemTableId[8];
+    uint32_t oemRevision, creatorId, creatorRevision;
+};
+
+struct __attribute__ ((packed)) MADT
+{
+    SDTHeader header;
+    uint32_t lapicAddr, flags;
+};
+
+struct __attribute__ ((packed)) MADTEntryHeader
+{
+    uint8_t type, length;
+};
+
+struct __attribute__ ((packed)) MADT_IOAPIC
+{
+    MADTEntryHeader header;
+    uint8_t ioapicId, reserved;
+    uint32_t ioapicAddr, globalIrqBase;
+};
+
+struct __attribute__ ((packed)) MADT_ISO
+{
+    MADTEntryHeader header;
+    uint8_t bus, source;
+    uint32_t globalIrq;
+    uint16_t flags;
+};
+
 extern limine_hhdm_request hhdm_request;
 extern limine_rsdp_request rsdp_request;
 
-static bool signaturesMatch(const char* sig1, const char* sig2, const size_t len)
+bool signaturesMatch(const char* sig1, const char* sig2, const size_t len)
 {
     for (size_t i = 0; i < len; ++i) if (sig1[i] != sig2[i]) return false;
     return true;
 }
 
-static ACPI::SDTHeader* findTable(ACPI::SDTHeader* sdt, const char signature[4])
+SDTHeader* findTable(SDTHeader* sdt, const char signature[4])
 {
     const bool isXSDT = signaturesMatch(sdt->signature, "XSDT", 4);
     if (!isXSDT && !signaturesMatch(sdt->signature, "RSDT", 4)) return nullptr;
 
-    const auto* base = reinterpret_cast<uint8_t*>(sdt) + sizeof(ACPI::SDTHeader);
-    for (uint64_t i = 0; i < (sdt->length - sizeof(ACPI::SDTHeader)) / (isXSDT ? 8 : 4); ++i)
+    const auto* base = reinterpret_cast<uint8_t*>(sdt) + sizeof(SDTHeader);
+    for (uint64_t i = 0; i < (sdt->length - sizeof(SDTHeader)) / (isXSDT ? 8 : 4); ++i)
     {
         const uint64_t phys = isXSDT
                                   ? *reinterpret_cast<const uint64_t*>(base + i * 8)
                                   : *reinterpret_cast<const uint32_t*>(base + i * 4);
         if (!phys) continue;
 
-        auto* hdr = reinterpret_cast<ACPI::SDTHeader*>(phys + hhdm_request.response->offset);
+        auto* hdr = reinterpret_cast<SDTHeader*>(phys + hhdm_request.response->offset);
         if (hdr && signaturesMatch(hdr->signature, signature, 4)) return hdr;
     }
     return nullptr;

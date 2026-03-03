@@ -1,8 +1,22 @@
 #include <kernel/arch/idt.h>
 #include <kernel/arch/isr.h>
 
-static IDTEntry idt[256];
-static IDTPointer idtPointer = {sizeof(idt) - 1, reinterpret_cast<uint64_t>(idt)};
+struct __attribute__ ((packed)) IDTEntry
+{
+    uint16_t offsetLow, selector;
+    uint8_t ist, typeAttr;
+    uint16_t offsetMid;
+    uint32_t offsetHigh, zero;
+};
+
+struct __attribute__ ((packed)) IDTPointer
+{
+    uint16_t limit;
+    uint64_t base;
+};
+
+IDTEntry idt[256];
+IDTPointer idtPointer = {sizeof(idt) - 1, reinterpret_cast<uint64_t>(idt)};
 
 extern "C" void* const isrList[32] = {
     reinterpret_cast<void*>(isr0), reinterpret_cast<void*>(isr1), reinterpret_cast<void*>(isr2),

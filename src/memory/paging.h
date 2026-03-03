@@ -30,38 +30,29 @@ constexpr PageFlags operator&(PageFlags a, PageFlags b)
 
 constexpr PageFlags operator~(PageFlags flag) { return static_cast<PageFlags>(~static_cast<uint64_t>(flag)); }
 
-extern uint64_t* pml4;
-
-class Paging
+namespace Paging
 {
-public:
-    static void init();
+    void init();
 
-    static bool mapSmall(uint64_t virtualAddress, uint64_t physicalAddress, PageFlags flags);
-    static bool mapMedium(uint64_t virtualAddress, uint64_t physicalAddress, PageFlags flags);
-    static bool mapLarge(uint64_t virtualAddress, uint64_t physicalAddress, PageFlags flags);
+    bool mapSmall(uint64_t virtualAddress, uint64_t physicalAddress, PageFlags flags);
+    bool mapMedium(uint64_t virtualAddress, uint64_t physicalAddress, PageFlags flags);
+    bool mapLarge(uint64_t virtualAddress, uint64_t physicalAddress, PageFlags flags);
 
-    static void unmapSmall(uint64_t virtualAddress);
-    static void unmapMedium(uint64_t virtualAddress);
-    static void unmapLarge(uint64_t virtualAddress);
+    void unmapSmall(uint64_t virtualAddress);
+    void unmapMedium(uint64_t virtualAddress);
+    void unmapLarge(uint64_t virtualAddress);
+}
 
-private:
-    static Spinlock pagingLock;
-};
-
-class FrameAllocator
+namespace FrameAllocator
 {
-public:
-    static void init();
-    static void* alloc();
-    static void free(void* frame);
-    static void reserve(void* frame);
-    static bool used(void* frame);
+    void init();
+    void* alloc();
+    void free(void* frame);
+    void reserve(void* frame);
+    bool used(void* frame);
 
-    static uint64_t usedCount();
-    static uint64_t totalCount();
-    static Spinlock frameAllocatorLock;
+    uint64_t usedCount();
+    uint64_t totalCount();
 
-    static constexpr uint64_t SMALL_SIZE = 4096, MEDIUM_SIZE = 2ULL * 1024 * 1024,
-                              LARGE_SIZE = 1ULL * 1024 * 1024 * 1024, BIOS_START = 0x100000;
-};
+    constexpr uint64_t SMALL_SIZE = 4096, MEDIUM_SIZE = 2ULL * 1024 * 1024, LARGE_SIZE = 1ULL * 1024 * 1024 * 1024;
+}
