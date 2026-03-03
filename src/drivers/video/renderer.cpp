@@ -82,6 +82,11 @@ void printCharUnlocked(const char c, const uint32_t fg = ansiFg, const uint32_t 
     {
         cursorX = 0;
         ++cursorY;
+        if (cursorY >= fbHeight / font.height)
+        {
+            scrollUnlocked();
+            cursorY--;
+        }
 
         if (serialPrint) Serial::printf("\n");
         return;
