@@ -81,7 +81,7 @@ set(COMMON_C_FLAGS -ffreestanding -g -O2 -Wall -Wextra -m64 -mno-red-zone -mgene
 target_compile_options(mesh.elf PRIVATE $<$<COMPILE_LANGUAGE:C>:${COMMON_C_FLAGS}>
     $<$<COMPILE_LANGUAGE:CXX>:${COMMON_C_FLAGS} -fno-exceptions -fno-rtti>
     $<$<COMPILE_LANGUAGE:ASM_NASM>:-f elf64>)
-target_include_directories(mesh.elf PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_include_directories(mesh.elf PRIVATE ${CMAKE_SOURCE_DIR}/src/include)
 target_compile_definitions(mesh.elf PRIVATE LIMINE_API_REVISION=3)
 target_link_options(mesh.elf PRIVATE -nostdlib -z noexecstack -static -T ${CMAKE_SOURCE_DIR}/lib/linker.ld)
 

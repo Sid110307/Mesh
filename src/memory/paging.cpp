@@ -1,6 +1,6 @@
+#include <core/limine.h>
+#include <drivers/serial.h>
 #include <memory/paging.h>
-#include <drivers/io/serial/serial.h>
-#include <kernel/boot/limine.h>
 
 extern limine_framebuffer_request framebuffer_request;
 extern limine_memmap_request memmap_request;
