@@ -1,5 +1,5 @@
-#include <arch/idt.h>
-#include <arch/isr.h>
+#include <arch/x86_64/idt.h>
+#include <arch/x86_64/isr.h>
 
 struct __attribute__ ((packed)) IDTEntry
 {

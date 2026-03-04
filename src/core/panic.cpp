@@ -1,5 +1,5 @@
-#include <arch/irq.h>
-#include <arch/smp.h>
+#include <arch/x86_64/irq.h>
+#include <arch/x86_64/smp.h>
 #include <core/panic.h>
 #include <drivers/renderer.h>
 

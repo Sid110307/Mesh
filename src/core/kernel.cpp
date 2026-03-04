@@ -1,8 +1,8 @@
-#include <arch/acpi.h>
-#include <arch/gdt.h>
-#include <arch/idt.h>
-#include <arch/irq.h>
-#include <arch/isr.h>
+#include <arch/x86_64/acpi.h>
+#include <arch/x86_64/gdt.h>
+#include <arch/x86_64/idt.h>
+#include <arch/x86_64/irq.h>
+#include <arch/x86_64/isr.h>
 #include <arch/lapic.h>
 #include <arch/smp.h>
 #include <core/limine.h>

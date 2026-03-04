@@ -1,5 +1,5 @@
-#include <arch/acpi.h>
-#include <arch/lapic.h>
+#include <arch/x86_64/acpi.h>
+#include <arch/x86_64/lapic.h>
 #include <core/limine.h>
 #include <drivers/serial.h>
 

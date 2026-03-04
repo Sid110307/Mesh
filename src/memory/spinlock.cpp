@@ -1,4 +1,4 @@
-#include <arch/irq.h>
+#include <arch/x86_64/irq.h>
 #include <memory/spinlock.h>
 
 Spinlock::Spinlock() : locked(0) {}

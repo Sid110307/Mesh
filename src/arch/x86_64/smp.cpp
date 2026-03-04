@@ -1,7 +1,7 @@
-#include <arch/gdt.h>
-#include <arch/idt.h>
-#include <arch/irq.h>
-#include <arch/smp.h>
+#include <arch/x86_64/gdt.h>
+#include <arch/x86_64/idt.h>
+#include <arch/x86_64/irq.h>
+#include <arch/x86_64/smp.h>
 #include <core/limine.h>
 #include <drivers/renderer.h>
 #include <memory/atomic.h>

@@ -1,5 +1,5 @@
-#include <arch/gdt.h>
-#include <arch/smp.h>
+#include <arch/x86_64/gdt.h>
+#include <arch/x86_64/smp.h>
 #include <core/limine.h>
 #include <core/utils.h>
 

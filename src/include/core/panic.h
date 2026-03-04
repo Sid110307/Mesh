@@ -1,7 +1,7 @@
 #pragma once
 
 #include <core/utils.h>
-#include <arch/isr.h>
+#include <arch/x86_64/isr.h>
 
 namespace Panic
 {

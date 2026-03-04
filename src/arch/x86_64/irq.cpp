@@ -1,4 +1,4 @@
-#include <arch/irq.h>
+#include <arch/x86_64/irq.h>
 #include <core/utils.h>
 
 bool IRQ::interruptsEnabled()

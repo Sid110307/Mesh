@@ -1,4 +1,4 @@
-#include <arch/isr.h>
+#include <arch/x86_64/isr.h>
 #include <arch/lapic.h>
 #include <core/panic.h>
 #include <drivers/keyboard.h>

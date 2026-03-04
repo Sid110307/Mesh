@@ -1,5 +1,5 @@
-#include <arch/irq.h>
-#include <arch/lapic.h>
+#include <arch/x86_64/irq.h>
+#include <arch/x86_64/lapic.h>
 #include <drivers/serial.h>
 #include <memory/atomic.h>
 
