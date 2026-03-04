@@ -439,9 +439,9 @@ void pushEvent(const Keyboard::Event& event)
 bool consumeByte()
 {
     if (!(inb(STATUS_PORT) & STATUS_OUTPUT_BUFFER)) return false;
+    LockGuardIRQ guard(lock);
 
     const uint8_t scancode = readData();
-    LockGuardIRQ guard(lock);
     Keyboard::Event e = {};
     bool produced = false;
 

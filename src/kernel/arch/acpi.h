@@ -4,7 +4,7 @@
 
 namespace ACPI
 {
-    struct Iso
+    struct ISO
     {
         uint32_t globalIrq = 0;
         bool present = false, activeLow = false, levelTriggered = false;
@@ -13,7 +13,7 @@ namespace ACPI
     struct MADTInfo
     {
         uint64_t ioapicPhys = 0, ioapicGlobalIrqBase = 0;
-        Iso iso[16] = {};
+        ISO iso[16] = {};
     };
 
      bool init(MADTInfo& madtInfo);

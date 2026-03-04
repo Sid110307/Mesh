@@ -1,15 +1,14 @@
-#include <drivers/video/renderer.h>
-#include <drivers/io/keyboard/keyboard.h>
-#include <drivers/io/pit/pit.h>
-
 #include <kernel/arch/gdt.h>
 #include <kernel/arch/idt.h>
 #include <kernel/arch/isr.h>
 #include <kernel/arch/acpi.h>
+#include <kernel/arch/irq.h>
+#include <kernel/boot/limine.h>
 #include <memory/paging.h>
 #include <memory/smp.h>
 #include <memory/lapic.h>
-#include <kernel/boot/limine.h>
+#include <drivers/video/renderer.h>
+#include <drivers/io/keyboard/keyboard.h>
 
 extern limine_framebuffer_request framebuffer_request;
 extern limine_memmap_request memmap_request;
@@ -98,8 +97,8 @@ void initIDT()
 {
     Renderer::printf("\x1b[36mInitializing IDT... ");
     IDTManager::init();
-    IDTManager::setEntry(0x20, reinterpret_cast<void(*)()>(isrTimer), 0x8E, 0);
     IDTManager::setEntry(0x21, reinterpret_cast<void(*)()>(isrKeyboard), 0x8E, 0);
+    IDTManager::setEntry(0x22, reinterpret_cast<void(*)()>(isrTimer), 0x8E, 0);
     IDTManager::load();
     Renderer::printf("\x1b[32mDone!\n");
 }
@@ -137,8 +136,6 @@ void initIOAPIC()
     uint32_t globalIrq;
     bool activeLow, levelTriggered;
 
-    ACPI::resolveIsa(madt, 0, globalIrq, activeLow, levelTriggered);
-    IOAPIC::redirect(globalIrq, 0x20, lapicId, activeLow, levelTriggered);
     ACPI::resolveIsa(madt, 1, globalIrq, activeLow, levelTriggered);
     IOAPIC::redirect(globalIrq, 0x21, lapicId, activeLow, levelTriggered);
 
@@ -163,19 +160,19 @@ extern "C" [[noreturn]] void kernelMain()
 
     initIOAPIC();
     Keyboard::init();
-    PIT::init(1000);
 
-    asm volatile ("sti");
+    LAPIC::timerInit(0x22);
+    LAPIC::timerSetDivide(16);
+    LAPIC::timerCalibrate(10);
+    LAPIC::timerPeriodic();
+
+    IRQ::enableInterrupts();
     while (true)
     {
         while (char c = Keyboard::readChar()) Renderer::printf("%c", c);
 
-        static uint64_t last = 0;
-        if (uint64_t now = PIT::getTicks(); now - last >= 1000)
-        {
-            last = now;
-            Renderer::printf("\x1b[90m.\x1b[0m");
-        }
+        LAPIC::sleepMs(1000);
+        Renderer::printf("\x1b[90m.\x1b[0m");
 
         asm volatile ("hlt");
     }

@@ -23,7 +23,7 @@
 - [x] Serial (UART) console output
 - [x] Framebuffer text + ANSI color output
 - [x] Keyboard driver (PS/2)
-- [x] PIT interrupts (timer and sleep functions)
+- [x] LAPIC timer interrupts and sleep functions
 
 #### Planned
 

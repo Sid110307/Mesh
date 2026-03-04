@@ -77,7 +77,7 @@ add_custom_target(embedded_assets ALL DEPENDS ${EMBED_ASSET_OBJS})
 add_executable(mesh.elf ${ASM_NASM_SRC} ${C_SRC} ${CPP_SRC} ${EMBED_ASSET_OBJS})
 add_dependencies(mesh.elf embedded_assets)
 
-set(COMMON_C_FLAGS -ffreestanding -g -O2 -Wall -Wextra -m64 -mno-red-zone -mgeneral-regs-only)
+set(COMMON_C_FLAGS -ffreestanding -g -O2 -Wall -Wextra -m64 -mno-red-zone -mgeneral-regs-only -fno-omit-frame-pointer)
 target_compile_options(mesh.elf PRIVATE $<$<COMPILE_LANGUAGE:C>:${COMMON_C_FLAGS}>
     $<$<COMPILE_LANGUAGE:CXX>:${COMMON_C_FLAGS} -fno-exceptions -fno-rtti>
     $<$<COMPILE_LANGUAGE:ASM_NASM>:-f elf64>)
@@ -98,7 +98,7 @@ add_custom_command(
     COMMAND ${XORRISO_EXECUTABLE} -as mkisofs -R -r -o ${OUT_DIR}/Mesh.iso -b limine-bios-cd.bin -no-emul-boot
     -boot-load-size 4 -boot-info-table --efi-boot limine-uefi-cd.bin -efi-boot-part --efi-boot-image ${ISO_ROOT}
     >/dev/null 2>&1
-    COMMAND ${LIMINE_EXECUTABLE} bios-install ${OUT_DIR}/Mesh.iso
+    COMMAND ${LIMINE_EXECUTABLE} bios-install ${OUT_DIR}/Mesh.iso >/dev/null 2>&1
     DEPENDS mesh.elf
     COMMENT "Creating bootable ISO"
 )

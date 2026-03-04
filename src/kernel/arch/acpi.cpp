@@ -1,5 +1,6 @@
 #include <kernel/arch/acpi.h>
 #include <kernel/boot/limine.h>
+#include <memory/lapic.h>
 #include <drivers/io/serial/serial.h>
 
 struct __attribute__ ((packed)) RSDP
@@ -46,6 +47,36 @@ struct __attribute__ ((packed)) MADT_ISO
     uint8_t bus, source;
     uint32_t globalIrq;
     uint16_t flags;
+};
+
+struct __attribute__ ((packed)) FADT_GAS
+{
+    uint8_t addressSpace, bitWidth, bitOffset, accessSize;
+    uint64_t address;
+};
+
+struct __attribute__ ((packed)) FADT
+{
+    SDTHeader header;
+    uint32_t firmwareCtrl, dsdtAddress;
+    uint8_t reserved1, preferredPmProfile;
+    uint16_t sciInterrupt;
+    uint32_t smiCommandPort;
+    uint8_t acpiEnable, acpiDisable, s4biosReq, pStateControl;
+    uint32_t pm1aEventBlockAddr, pm1bEventBlockAddr, pm1aControlBlockAddr, pm1bControlBlockAddr, pm2ControlBlockAddr,
+             pmTimerBlockAddr, gpe0BlockAddr, gpe1BlockAddr;
+    uint8_t pm1EventLength, pm1ControlLength, pm2ControlLength, pmTimerLength, gpe0Length, gpe1Length, gpe1Base,
+            cStateControl;
+    uint16_t worstC2Latency, worstC3Latency, flushSize, flushStride;
+    uint8_t dutyOffset, dutyWidth, dayAlarm, monthAlarm, centuryAlarm;
+    uint16_t bootArchitectureFlags;
+    uint8_t reserved2;
+    uint32_t flags;
+    FADT_GAS resetReg;
+    uint8_t resetValue, reserved3[3];
+    uint64_t xFirmwareCtrl, xDsdtAddress;
+    FADT_GAS xPm1aEventBlock, xPm1bEventBlock, xPm1aControlBlock, xPm1bControlBlock, xPm2ControlBlock, xPmTimerBlock,
+             xGpe0Block, xGpe1Block;
 };
 
 extern limine_hhdm_request hhdm_request;
@@ -107,6 +138,15 @@ bool ACPI::init(MADTInfo& madtInfo)
         Serial::printf("ACPI: No valid RSDT/XSDT address in RSDP (revision %u, RSDT 0x%X, XSDT 0x%lX)\n",
                        rsdp->revision, rsdp->rsdtAddress, rsdp->xsdtAddress);
         return false;
+    }
+
+    if (auto* facpHeader = findTable(root, "FACP"); !facpHeader) Serial::printf("ACPI: FACP not found\n");
+    else
+    {
+        if (const auto* fadt = reinterpret_cast<FADT*>(facpHeader); fadt->xPmTimerBlock.address)
+            LAPIC::timerSetPort(fadt->xPmTimerBlock.address);
+        else if (fadt->pmTimerBlockAddr) LAPIC::timerSetPort(fadt->pmTimerBlockAddr);
+        else Serial::printf("ACPI: No PM timer block address found in FADT\n");
     }
 
     auto* madtHeader = findTable(root, "APIC");

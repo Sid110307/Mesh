@@ -3,6 +3,7 @@
 #include <drivers/video/renderer.h>
 #include <kernel/arch/gdt.h>
 #include <kernel/arch/idt.h>
+#include <kernel/arch/irq.h>
 #include <kernel/sync/atomic.h>
 #include <kernel/sync/spinlock.h>
 #include <kernel/boot/limine.h>
@@ -36,7 +37,7 @@ extern "C" [[noreturn]] void apMain(uint32_t cpuID)
     GDTManager::loadTR(cpuID);
     apReadyCount.increment();
 
-    asm volatile ("sti");
+    IRQ::enableInterrupts();
     while (true) asm volatile ("hlt");
 }
 

@@ -28,6 +28,9 @@ enum Color
 uint8_t inb(uint16_t port);
 void outb(uint16_t port, uint8_t val);
 
+uint32_t inl(uint16_t port);
+void outl(uint16_t port, uint32_t val);
+
 int atoi(const char* str);
 char* utoa(uint64_t value, char* buffer, size_t bufferSize, uint8_t base = 10, bool uppercase = true);
 char* strchr(const char* str, int c);
