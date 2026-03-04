@@ -99,10 +99,13 @@ uint64_t LAPIC::timerGetTicks() { return apicTicks.load(); }
 void LAPIC::sleepMs(uint32_t ms)
 {
     if (ms == 0 || apicTimerFrequency == 0) return;
-    const uint64_t endTime = timerGetTicks() + ms * apicTimerFrequency / 1000u;
 
-    if (IRQ::interruptsEnabled()) while (timerGetTicks() < endTime) asm volatile("hlt");
-    else timerWaitTicks((endTime - timerGetTicks()) * apicTimerFrequency / 1000u);
+    if (IRQ::interruptsEnabled())
+    {
+        const uint64_t endTime = timerGetTicks() + ms * apicTimerFrequency / 1000u;
+        while (timerGetTicks() < endTime) asm volatile("hlt");
+    }
+    else while (ms--) asm volatile("pause");
 }
 
 void IOAPIC::init(const uint64_t virtBase, const uint32_t irqBase)

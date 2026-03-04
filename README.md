@@ -24,15 +24,15 @@
 - [x] Framebuffer text + ANSI color output
 - [x] Keyboard driver (PS/2)
 - [x] LAPIC timer interrupts and sleep functions
+- [x] Kernel panic and stack trace
+- [ ] Kernel heap allocator (buddy and slab)
 
 #### Planned
 
-- [ ] Mouse driver (PS/2)
-- [ ] Kernel panic and stack trace
-- [ ] Kernel heap allocator
 - [ ] Virtual memory management
 - [ ] Per-CPU data structures
 - [ ] Scheduler
+- [ ] Mouse driver (PS/2)
 - [ ] Context switching
 - [ ] Userspace syscall interface
 - [ ] Per-process virtual address spaces

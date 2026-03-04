@@ -88,6 +88,14 @@ bool signaturesMatch(const char* sig1, const char* sig2, const size_t len)
     return true;
 }
 
+bool checksumValid(const uint8_t* data, const size_t length)
+{
+    uint8_t sum = 0;
+    for (size_t i = 0; i < length; ++i) sum += data[i];
+
+    return sum == 0;
+}
+
 SDTHeader* findTable(SDTHeader* sdt, const char signature[4])
 {
     const bool isXSDT = signaturesMatch(sdt->signature, "XSDT", 4);
@@ -102,7 +110,15 @@ SDTHeader* findTable(SDTHeader* sdt, const char signature[4])
         if (!phys) continue;
 
         auto* hdr = reinterpret_cast<SDTHeader*>(phys + hhdm_request.response->offset);
-        if (hdr && signaturesMatch(hdr->signature, signature, 4)) return hdr;
+        if (hdr && signaturesMatch(hdr->signature, signature, 4))
+        {
+            if (!checksumValid(reinterpret_cast<const uint8_t*>(hdr), hdr->length))
+            {
+                Serial::printf("ACPI: Invalid checksum for table %s\n", signature);
+                continue;
+            }
+            return hdr;
+        }
     }
     return nullptr;
 }
@@ -119,6 +135,11 @@ bool ACPI::init(MADTInfo& madtInfo)
     if (!signaturesMatch(rsdp->signature, "RSD PTR ", 8))
     {
         Serial::printf("ACPI: Invalid RSDP signature\n");
+        return false;
+    }
+    if (!checksumValid(reinterpret_cast<const uint8_t*>(rsdp), rsdp->revision >= 2 ? rsdp->length : 20))
+    {
+        Serial::printf("ACPI: Invalid RSDP checksum\n");
         return false;
     }
 
