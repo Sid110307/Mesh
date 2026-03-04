@@ -12,6 +12,8 @@ Spinlock pagingLock, frameAllocatorLock;
 uint64_t memoryBase = 0, memorySize = 0, totalFrames = 0, usedFrames = 0, next = 0, *bitmap = nullptr, *pml4 = nullptr;
 bool pagingInitialized = false;
 
+void invlpg(const uint64_t address) { if (pagingInitialized) asm volatile ("invlpg (%0)" :: "r"(address) : "memory"); }
+
 uint64_t* createPageTable()
 {
     void* frame = FrameAllocator::alloc();
@@ -59,10 +61,9 @@ void freeTable(uint64_t* parent, const uint16_t index)
     parent[index] = 0;
 }
 
-void invlpg(const uint64_t address) { if (pagingInitialized) asm volatile ("invlpg (%0)" :: "r"(address) : "memory"); }
-bool aligned(const uint64_t address, const uint64_t size) { return (address & (size - 1)) == 0; }
-uint64_t alignDown(const uint64_t address, const uint64_t size) { return address & ~(size - 1); }
-uint64_t alignUp(const uint64_t address, const uint64_t size) { return (address + size - 1) & ~(size - 1); }
+bool Alignment::aligned(const uint64_t address, const uint64_t size) { return (address & (size - 1)) == 0; }
+uint64_t Alignment::alignDown(const uint64_t address, const uint64_t size) { return address & ~(size - 1); }
+uint64_t Alignment::alignUp(const uint64_t address, const uint64_t size) { return (address + size - 1) & ~(size - 1); }
 
 bool mapSmall(const uint64_t virtualAddress, const uint64_t physicalAddress, PageFlags flags)
 {
@@ -183,13 +184,13 @@ void unmapLarge(const uint64_t virtualAddress)
     if (tableEmpty(pdpt)) freeTable(pml4, static_cast<uint16_t>(pml4Index));
 }
 
-void Paging::init()
+bool Paging::init()
 {
     pml4 = createPageTable();
     if (!pml4)
     {
         Serial::printf("Paging: Failed to create PML4 table.\n");
-        while (true) asm volatile ("hlt");
+        return false;
     }
 
     uint64_t kernelPhysStart = executable_addr_request.response->physical_base,
@@ -198,7 +199,7 @@ void Paging::init()
              PageFlags::PRESENT | PageFlags::RW | PageFlags::GLOBAL))
     {
         Serial::printf("Paging: Failed to map kernel page at 0x%lx to 0x%lx.\n", kernelVirtStart, kernelPhysStart);
-        while (true) asm volatile ("hlt");
+        return false;
     }
 
     if (framebuffer_request.response && framebuffer_request.response->framebuffer_count > 0)
@@ -209,7 +210,7 @@ void Paging::init()
                  PageFlags::PRESENT | PageFlags::RW | PageFlags::GLOBAL | PageFlags::NO_EXECUTE))
         {
             Serial::printf("Paging: Failed to map framebuffer page at 0x%lx.\n", fbBase);
-            while (true) asm volatile ("hlt");
+            return false;
         }
     }
 
@@ -235,7 +236,7 @@ void Paging::init()
              PageFlags::PRESENT | PageFlags::RW))
     {
         Serial::printf("Paging: Failed to map PML4 page at 0x%lx.\n", reinterpret_cast<uint64_t>(pml4));
-        while (true) asm volatile ("hlt");
+        return false;
     }
 
     asm volatile ("mov %0, %%cr3" :: "r"(pml4Phys) : "memory");
@@ -253,21 +254,22 @@ void Paging::init()
     asm volatile ("mov %0, %%cr0" :: "r"(cr0));
 
     pagingInitialized = true;
+    return true;
 }
 
 bool Paging::map(uint64_t virtualAddress, uint64_t physicalAddress, uint64_t size, const PageFlags flags)
 {
-    if (!aligned(virtualAddress, FrameAllocator::SMALL_SIZE) || !aligned(physicalAddress, FrameAllocator::SMALL_SIZE) ||
-        size == 0)
+    if (!Alignment::aligned(virtualAddress, FrameAllocator::SMALL_SIZE) ||
+        !Alignment::aligned(physicalAddress, FrameAllocator::SMALL_SIZE) || size == 0)
         return false;
 
     LockGuard guard(pagingLock);
-    size = alignUp(size, FrameAllocator::SMALL_SIZE);
+    size = Alignment::alignUp(size, FrameAllocator::SMALL_SIZE);
 
     while (size)
     {
-        if (size >= FrameAllocator::LARGE_SIZE && aligned(virtualAddress, FrameAllocator::LARGE_SIZE) &&
-            aligned(physicalAddress, FrameAllocator::LARGE_SIZE))
+        if (size >= FrameAllocator::LARGE_SIZE && Alignment::aligned(virtualAddress, FrameAllocator::LARGE_SIZE) &&
+            Alignment::aligned(physicalAddress, FrameAllocator::LARGE_SIZE))
         {
             if (!mapLarge(virtualAddress, physicalAddress, flags)) return false;
             virtualAddress += FrameAllocator::LARGE_SIZE;
@@ -277,8 +279,8 @@ bool Paging::map(uint64_t virtualAddress, uint64_t physicalAddress, uint64_t siz
             continue;
         }
 
-        if (size >= FrameAllocator::MEDIUM_SIZE && aligned(virtualAddress, FrameAllocator::MEDIUM_SIZE) &&
-            aligned(physicalAddress, FrameAllocator::MEDIUM_SIZE))
+        if (size >= FrameAllocator::MEDIUM_SIZE && Alignment::aligned(virtualAddress, FrameAllocator::MEDIUM_SIZE) &&
+            Alignment::aligned(physicalAddress, FrameAllocator::MEDIUM_SIZE))
         {
             if (!mapMedium(virtualAddress, physicalAddress, flags)) return false;
             virtualAddress += FrameAllocator::MEDIUM_SIZE;
@@ -299,20 +301,20 @@ bool Paging::map(uint64_t virtualAddress, uint64_t physicalAddress, uint64_t siz
 
 void Paging::unmap(const uint64_t virtualAddress, const uint64_t size)
 {
-    if (!aligned(virtualAddress, FrameAllocator::SMALL_SIZE) || size == 0) return;
+    if (!Alignment::aligned(virtualAddress, FrameAllocator::SMALL_SIZE) || size == 0) return;
     LockGuard guard(pagingLock);
 
-    uint64_t start = alignDown(virtualAddress, FrameAllocator::SMALL_SIZE);
-    const uint64_t end = alignUp(virtualAddress + size, FrameAllocator::SMALL_SIZE);
+    uint64_t start = Alignment::alignDown(virtualAddress, FrameAllocator::SMALL_SIZE);
+    const uint64_t end = Alignment::alignUp(virtualAddress + size, FrameAllocator::SMALL_SIZE);
 
     while (start < end)
     {
-        if (start + FrameAllocator::LARGE_SIZE <= end && aligned(start, FrameAllocator::LARGE_SIZE))
+        if (start + FrameAllocator::LARGE_SIZE <= end && Alignment::aligned(start, FrameAllocator::LARGE_SIZE))
         {
             unmapLarge(start);
             start += FrameAllocator::LARGE_SIZE;
         }
-        else if (start + FrameAllocator::MEDIUM_SIZE <= end && aligned(start, FrameAllocator::MEDIUM_SIZE))
+        else if (start + FrameAllocator::MEDIUM_SIZE <= end && Alignment::aligned(start, FrameAllocator::MEDIUM_SIZE))
         {
             unmapMedium(start);
             start += FrameAllocator::MEDIUM_SIZE;
@@ -325,7 +327,7 @@ void Paging::unmap(const uint64_t virtualAddress, const uint64_t size)
     }
 }
 
-void FrameAllocator::init()
+bool FrameAllocator::init()
 {
     LockGuard guard(frameAllocatorLock);
     uint64_t bestBase = 0, bestSize = 0;
@@ -344,11 +346,11 @@ void FrameAllocator::init()
     if (bestBase == 0 || bestSize == 0)
     {
         Serial::printf("Paging: No memory region for frame allocator\n");
-        while (true) asm volatile ("hlt");
+        return false;
     }
 
-    uint64_t total = bestSize / SMALL_SIZE, bitmapBytes = (total + 63) / 64 * sizeof(uint64_t),
-             bitmapPages = (bitmapBytes + SMALL_SIZE - 1) / SMALL_SIZE, bitmapPhys = bestBase;
+    const uint64_t total = bestSize / SMALL_SIZE, bitmapBytes = (total + 63) / 64 * sizeof(uint64_t),
+                   bitmapPages = (bitmapBytes + SMALL_SIZE - 1) / SMALL_SIZE, bitmapPhys = bestBase;
     bitmap = reinterpret_cast<uint64_t*>(hhdm_request.response->offset + bitmapPhys);
     memset(bitmap, 0, bitmapPages * SMALL_SIZE);
 
@@ -373,7 +375,9 @@ void FrameAllocator::init()
 
         for (uint64_t p = start; p < end; p += SMALL_SIZE) reserve(reinterpret_cast<void*>(p));
     }
+
     for (uint64_t i = 0; i < bitmapPages; ++i) reserve(reinterpret_cast<void*>(bitmapPhys + i * SMALL_SIZE));
+    return true;
 }
 
 void* FrameAllocator::alloc()
@@ -457,3 +461,5 @@ bool FrameAllocator::used(void* frame)
 
 uint64_t FrameAllocator::usedCount() { return usedFrames; }
 uint64_t FrameAllocator::totalCount() { return totalFrames; }
+uint64_t FrameAllocator::baseAddress() { return memoryBase; }
+uint64_t FrameAllocator::size() { return memorySize; }

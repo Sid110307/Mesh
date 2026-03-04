@@ -3,12 +3,15 @@
 #include <arch/x86_64/idt.h>
 #include <arch/x86_64/irq.h>
 #include <arch/x86_64/isr.h>
-#include <arch/lapic.h>
-#include <arch/smp.h>
+#include <arch/x86_64/lapic.h>
+#include <arch/x86_64/smp.h>
 #include <core/limine.h>
+#include <core/panic.h>
 #include <drivers/keyboard.h>
 #include <drivers/renderer.h>
 #include <memory/paging.h>
+#include <memory/buddy.h>
+#include <memory/slab.h>
 
 extern limine_framebuffer_request framebuffer_request;
 extern limine_memmap_request memmap_request;
@@ -106,8 +109,10 @@ void initIDT()
 void initPaging()
 {
     Renderer::printf("\x1b[36mInitializing Paging... ");
-    FrameAllocator::init();
-    Paging::init();
+    if (!FrameAllocator::init()) Panic::panic("Failed to initialize FrameAllocator.");
+    if (!Paging::init()) Panic::panic("Failed to initialize Paging.");
+    if (!BuddyAllocator::init()) Panic::panic("Failed to initialize BuddyAllocator.");
+    if (!SlabAllocator::init()) Panic::panic("Failed to initialize SlabAllocator.");
     Renderer::printf("\x1b[32mDone!\n");
 }
 
@@ -118,7 +123,7 @@ void initIOAPIC()
     ACPI::MADTInfo madt = {};
     if (!ACPI::init(madt))
     {
-        Renderer::printf("\x1b[31mFailed to initialize ACPI/MADT\x1b[0m\n");
+        Renderer::printf("\x1b[31mFailed to initialize ACPI/MADT.\x1b[0m\n");
         return;
     }
 
@@ -127,7 +132,7 @@ void initIOAPIC()
                           PageFlags::PRESENT | PageFlags::RW | PageFlags::CACHE_DISABLE | PageFlags::WRITE_THROUGH |
                           PageFlags::GLOBAL | PageFlags::NO_EXECUTE))
     {
-        Renderer::printf("\x1b[31mFailed to map IOAPIC MMIO\x1b[0m\n");
+        Renderer::printf("\x1b[31mFailed to map IOAPIC MMIO.\x1b[0m\n");
         return;
     }
 

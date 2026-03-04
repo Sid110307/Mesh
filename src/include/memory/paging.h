@@ -30,17 +30,23 @@ constexpr PageFlags operator&(PageFlags a, PageFlags b)
 
 constexpr PageFlags operator~(PageFlags flag) { return static_cast<PageFlags>(~static_cast<uint64_t>(flag)); }
 
+namespace Alignment
+{
+    bool aligned(uint64_t address, uint64_t size);
+    uint64_t alignDown(uint64_t address, uint64_t size);
+    uint64_t alignUp(uint64_t address, uint64_t size);
+}
+
 namespace Paging
 {
-    void init();
-
+    bool init();
     bool map(uint64_t virtualAddress, uint64_t physicalAddress, uint64_t size, PageFlags flags);
     void unmap(uint64_t virtualAddress, uint64_t size);
 }
 
 namespace FrameAllocator
 {
-    void init();
+    bool init();
     void* alloc();
     void free(void* frame);
     void reserve(void* frame);
@@ -48,6 +54,8 @@ namespace FrameAllocator
 
     uint64_t usedCount();
     uint64_t totalCount();
+    uint64_t baseAddress();
+    uint64_t size();
 
     constexpr uint64_t SMALL_SIZE = 4096, MEDIUM_SIZE = 2ULL * 1024 * 1024, LARGE_SIZE = 1ULL * 1024 * 1024 * 1024;
 }

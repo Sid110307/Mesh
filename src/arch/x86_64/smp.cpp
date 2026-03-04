@@ -19,8 +19,8 @@ extern limine_executable_address_request executable_addr_request;
 extern limine_mp_request mp_request;
 extern "C" void trampoline();
 
-alignas(4096) static uint8_t kernelStacks[SMP::MAX_CPUS][SMP::SMP_STACK_SIZE];
-alignas(4096) static uint8_t apStacks[SMP::MAX_CPUS][SMP::SMP_STACK_SIZE];
+alignas(FrameAllocator::SMALL_SIZE) static uint8_t kernelStacks[SMP::MAX_CPUS][SMP::SMP_STACK_SIZE];
+alignas(FrameAllocator::SMALL_SIZE) static uint8_t apStacks[SMP::MAX_CPUS][SMP::SMP_STACK_SIZE];
 
 Spinlock smpLock;
 ApBootInfo apBoot[SMP::MAX_CPUS] = {};
@@ -54,8 +54,8 @@ void SMP::init()
     lapicVirtBase = lapicPhysBase + hhdm_request.response->offset;
 
     if (!Paging::map(lapicVirtBase, lapicPhysBase, FrameAllocator::SMALL_SIZE,
-                          PageFlags::PRESENT | PageFlags::RW | PageFlags::CACHE_DISABLE | PageFlags::WRITE_THROUGH |
-                          PageFlags::GLOBAL | PageFlags::NO_EXECUTE))
+                     PageFlags::PRESENT | PageFlags::RW | PageFlags::CACHE_DISABLE | PageFlags::WRITE_THROUGH |
+                     PageFlags::GLOBAL | PageFlags::NO_EXECUTE))
     {
         Renderer::printf("\x1b[31m[SMP] Failed to map LAPIC MMIO!\x1b[0m\n");
         return;
@@ -72,7 +72,7 @@ void SMP::init()
         const bool isBSP = cpu->lapic_id == mp_request.response->bsp_lapic_id;
         if (!isBSP && logicalID >= MAX_CPUS)
         {
-            Renderer::printf("\x1b[31m[SMP] Too many CPUs! Ignoring LAPIC ID %u\x1b[0m\n", cpu->lapic_id);
+            Renderer::printf("\x1b[31m[SMP] Too many CPUs! Ignoring LAPIC ID %u.\x1b[0m\n", cpu->lapic_id);
             continue;
         }
 
@@ -89,7 +89,7 @@ void SMP::init()
             __atomic_thread_fence(__ATOMIC_RELEASE);
             cpu->goto_address = reinterpret_cast<uint8_t*>(trampoline);
 
-            Renderer::printf("\x1b[33m[AP] Queued core (LAPIC ID %u) as CPU ID %u\x1b[0m\n", cpu->lapic_id, logicalID);
+            Renderer::printf("\x1b[33m[AP] Queued core (LAPIC ID %u) as CPU ID %u.\x1b[0m\n", cpu->lapic_id, logicalID);
             apCount++;
         }
 

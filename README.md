@@ -25,7 +25,7 @@
 - [x] Keyboard driver (PS/2)
 - [x] LAPIC timer interrupts and sleep functions
 - [x] Kernel panic and stack trace
-- [ ] Kernel heap allocator (buddy and slab)
+- [x] Kernel heap allocator (buddy and slab)
 
 #### Planned
 
@@ -47,13 +47,14 @@
 - [ ] Storage drivers (AHCI, NVMe, etc.)
 - [ ] USB drivers
 - [ ] Better terminal (scrolling, cursor, line editing, etc.)
-- [ ] Framebuffer graphics primitives (2D drawing, mouse cursor, etc.)
+- [ ] Framebuffer graphics primitives (2D/3D drawing, mouse cursor, etc.)
 - [ ] Window compositor
 - [ ] Networking (TCP/IP stack, Ethernet drivers, etc.)
 - [ ] IPC event system
 - [ ] SMP task scheduling and load balancing
 - [ ] Power management (ACPI S3 sleep, etc.)
 - [ ] RTC/CMOS clock support
+- [ ] Other architectures (ARM, RISC-V, etc.)
 
 ## Requirements
 
