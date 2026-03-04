@@ -53,7 +53,7 @@ void SMP::init()
     lapicPhysBase = (static_cast<uint64_t>(high) << 32 | low) & 0xFFFFF000;
     lapicVirtBase = lapicPhysBase + hhdm_request.response->offset;
 
-    if (!Paging::mapSmall(lapicVirtBase, lapicPhysBase,
+    if (!Paging::map(lapicVirtBase, lapicPhysBase, FrameAllocator::SMALL_SIZE,
                           PageFlags::PRESENT | PageFlags::RW | PageFlags::CACHE_DISABLE | PageFlags::WRITE_THROUGH |
                           PageFlags::GLOBAL | PageFlags::NO_EXECUTE))
     {

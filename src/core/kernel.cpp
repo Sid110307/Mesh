@@ -123,7 +123,7 @@ void initIOAPIC()
     }
 
     const uint64_t ioapicVirt = madt.ioapicPhys + hhdm_request.response->offset;
-    if (!Paging::mapSmall(ioapicVirt, madt.ioapicPhys,
+    if (!Paging::map(ioapicVirt, madt.ioapicPhys, FrameAllocator::SMALL_SIZE,
                           PageFlags::PRESENT | PageFlags::RW | PageFlags::CACHE_DISABLE | PageFlags::WRITE_THROUGH |
                           PageFlags::GLOBAL | PageFlags::NO_EXECUTE))
     {

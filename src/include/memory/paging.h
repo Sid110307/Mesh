@@ -1,7 +1,7 @@
 #pragma once
 
-#include <memory/spinlock.h>
 #include <core/utils.h>
+#include <memory/spinlock.h>
 
 enum class PageFlags : uint64_t
 {
@@ -34,13 +34,8 @@ namespace Paging
 {
     void init();
 
-    bool mapSmall(uint64_t virtualAddress, uint64_t physicalAddress, PageFlags flags);
-    bool mapMedium(uint64_t virtualAddress, uint64_t physicalAddress, PageFlags flags);
-    bool mapLarge(uint64_t virtualAddress, uint64_t physicalAddress, PageFlags flags);
-
-    void unmapSmall(uint64_t virtualAddress);
-    void unmapMedium(uint64_t virtualAddress);
-    void unmapLarge(uint64_t virtualAddress);
+    bool map(uint64_t virtualAddress, uint64_t physicalAddress, uint64_t size, PageFlags flags);
+    void unmap(uint64_t virtualAddress, uint64_t size);
 }
 
 namespace FrameAllocator
