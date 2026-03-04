@@ -49,7 +49,6 @@ namespace FrameAllocator
     bool init();
     void* alloc();
     void free(void* frame);
-    void reserve(void* frame);
     bool used(void* frame);
 
     uint64_t usedCount();

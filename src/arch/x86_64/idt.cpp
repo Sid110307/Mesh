@@ -77,7 +77,7 @@ void IDTManager::setEntry(const uint8_t vector, void (*isr)(), const uint8_t fla
     idt[vector] = {
         .offsetLow = static_cast<uint16_t>(addr & 0xFFFF),
         .selector = 0x08,
-        .ist = ist,
+        .ist = static_cast<uint8_t>(ist & 0x7),
         .typeAttr = flags,
         .offsetMid = static_cast<uint16_t>(addr >> 16 & 0xFFFF),
         .offsetHigh = static_cast<uint32_t>(addr >> 32 & 0xFFFFFFFF),

@@ -185,6 +185,22 @@ void unmapLarge(const uint64_t virtualAddress)
     if (tableEmpty(pdpt)) freeTable(pml4, static_cast<uint16_t>(pml4Index));
 }
 
+void reserve(void* frame)
+{
+    const auto phys = reinterpret_cast<uint64_t>(frame);
+    if (phys < memoryBase || phys >= memoryBase + memorySize || (phys - memoryBase) % FrameAllocator::SMALL_SIZE != 0)
+        return;
+
+    const uint64_t index = (phys - memoryBase) / FrameAllocator::SMALL_SIZE;
+    auto& word = bitmap[index / 64];
+
+    if (const uint64_t mask = 1ULL << (index % 64); !(word & mask))
+    {
+        word |= mask;
+        ++usedFrames;
+    }
+}
+
 bool Paging::init()
 {
     pml4 = createPageTable();
@@ -385,7 +401,7 @@ void* FrameAllocator::alloc()
                     freeMask &= (1ULL << validBits) - 1;
             if (!freeMask) continue;
 
-            const uint64_t bit1 = ffsll(freeMask);
+            const uint64_t bit1 = __builtin_ctzll(freeMask) + 1;
             if (bit1 == 0) continue;
             bitmap[w] = used | (1ULL << (bit1 - 1));
             ++usedFrames;
@@ -416,21 +432,6 @@ void FrameAllocator::free(void* frame)
     {
         word &= ~mask;
         --usedFrames;
-    }
-}
-
-void FrameAllocator::reserve(void* frame)
-{
-    const auto phys = reinterpret_cast<uint64_t>(frame);
-    if (phys < memoryBase || phys >= memoryBase + memorySize || (phys - memoryBase) % SMALL_SIZE != 0) return;
-
-    const uint64_t index = (phys - memoryBase) / SMALL_SIZE;
-    auto& word = bitmap[index / 64];
-
-    if (const uint64_t mask = 1ULL << (index % 64); !(word & mask))
-    {
-        word |= mask;
-        ++usedFrames;
     }
 }
 
