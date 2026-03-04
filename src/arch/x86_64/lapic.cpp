@@ -99,13 +99,14 @@ uint64_t LAPIC::timerGetTicks() { return apicTicks.load(); }
 void LAPIC::sleepMs(uint32_t ms)
 {
     if (ms == 0 || apicTimerFrequency == 0) return;
-
-    if (IRQ::interruptsEnabled())
+    if (!IRQ::interruptsEnabled())
     {
-        const uint64_t endTime = timerGetTicks() + ms * apicTimerFrequency / 1000u;
-        while (timerGetTicks() < endTime) asm volatile("hlt");
+        Serial::printf("LAPIC: Cannot sleep with interrupts disabled.\n");
+        return;
     }
-    else while (ms--) asm volatile("pause");
+
+    const uint64_t endTime = timerGetTicks() + ms * apicTimerFrequency / 1000u;
+    while (timerGetTicks() < endTime) asm volatile("hlt");
 }
 
 void IOAPIC::init(const uint64_t virtBase, const uint32_t irqBase)

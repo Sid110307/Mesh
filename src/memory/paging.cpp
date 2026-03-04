@@ -1,4 +1,5 @@
 #include <core/limine.h>
+#include <core/panic.h>
 #include <drivers/serial.h>
 #include <memory/paging.h>
 
@@ -217,29 +218,14 @@ bool Paging::init()
     for (size_t i = 0; i < memmap_request.response->entry_count; ++i)
     {
         const auto* e = memmap_request.response->entries[i];
-        if (!e || e->length == 0 || (e->type != LIMINE_MEMMAP_USABLE && e->type != LIMINE_MEMMAP_ACPI_RECLAIMABLE &&
-            e->type != LIMINE_MEMMAP_ACPI_NVS && e->type != LIMINE_MEMMAP_BOOTLOADER_RECLAIMABLE &&
-            e->type != LIMINE_MEMMAP_EXECUTABLE_AND_MODULES && e->type != LIMINE_MEMMAP_FRAMEBUFFER))
-            continue;
+        if (!e || e->length == 0 || e->type == LIMINE_MEMMAP_BAD_MEMORY || e->type == LIMINE_MEMMAP_RESERVED) continue;
 
         if (!map(e->base + hhdm_request.response->offset, e->base, e->length,
                  PageFlags::PRESENT | PageFlags::RW | PageFlags::GLOBAL | PageFlags::NO_EXECUTE))
-        {
-            Serial::printf("Paging: Failed to map physical memory page at 0x%lx.\n",
-                           e->base + hhdm_request.response->offset);
-            while (true) asm volatile("hlt");
-        }
+            Panic::panic("Failed to map physical memory page at 0x%lx.\n", e->base + hhdm_request.response->offset);
     }
 
-    uint64_t pml4Phys = reinterpret_cast<uint64_t>(pml4) - hhdm_request.response->offset;
-    if (!map(reinterpret_cast<uint64_t>(pml4), pml4Phys, FrameAllocator::SMALL_SIZE,
-             PageFlags::PRESENT | PageFlags::RW))
-    {
-        Serial::printf("Paging: Failed to map PML4 page at 0x%lx.\n", reinterpret_cast<uint64_t>(pml4));
-        return false;
-    }
-
-    asm volatile ("mov %0, %%cr3" :: "r"(pml4Phys) : "memory");
+    asm volatile ("mov %0, %%cr3" :: "r"(reinterpret_cast<uint64_t>(pml4) - hhdm_request.response->offset) : "memory");
     uint64_t cr4;
     asm volatile ("mov %%cr4, %0" : "=r"(cr4));
     cr4 |= 1ULL << 7;
@@ -259,12 +245,12 @@ bool Paging::init()
 
 bool Paging::map(uint64_t virtualAddress, uint64_t physicalAddress, uint64_t size, const PageFlags flags)
 {
-    if (!Alignment::aligned(virtualAddress, FrameAllocator::SMALL_SIZE) ||
-        !Alignment::aligned(physicalAddress, FrameAllocator::SMALL_SIZE) || size == 0)
-        return false;
-
+    if (size == 0) return false;
     LockGuard guard(pagingLock);
-    size = Alignment::alignUp(size, FrameAllocator::SMALL_SIZE);
+
+    virtualAddress = Alignment::alignDown(virtualAddress, FrameAllocator::SMALL_SIZE);
+    physicalAddress = Alignment::alignDown(physicalAddress, FrameAllocator::SMALL_SIZE);
+    size = Alignment::alignUp(virtualAddress + size, FrameAllocator::SMALL_SIZE) - virtualAddress;
 
     while (size)
     {
@@ -301,7 +287,7 @@ bool Paging::map(uint64_t virtualAddress, uint64_t physicalAddress, uint64_t siz
 
 void Paging::unmap(const uint64_t virtualAddress, const uint64_t size)
 {
-    if (!Alignment::aligned(virtualAddress, FrameAllocator::SMALL_SIZE) || size == 0) return;
+    if (size == 0) return;
     LockGuard guard(pagingLock);
 
     uint64_t start = Alignment::alignDown(virtualAddress, FrameAllocator::SMALL_SIZE);

@@ -40,8 +40,6 @@ constexpr size_t classes[] = {8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096},
                  numClasses = sizeof(classes) / sizeof(classes[0]);
 SlabCache slabCaches[numClasses] = {};
 
-void* physicalToVirtual(const uint64_t phys) { return reinterpret_cast<void*>(phys + hhdm_request.response->offset); }
-
 uint64_t virtualToPhysical(void* virt)
 {
     const auto v = reinterpret_cast<uint64_t>(virt);
@@ -63,7 +61,7 @@ SlabHeader* newSlab(SlabCache* cache)
     const uint64_t slabPhys = BuddyAllocator::alloc(0);
     if (!slabPhys) return nullptr;
 
-    auto* baseAddress = static_cast<uint8_t*>(physicalToVirtual(slabPhys));
+    auto* baseAddress = reinterpret_cast<uint8_t*>(hhdm_request.response->offset + slabPhys);
     auto* header = reinterpret_cast<SlabHeader*>(baseAddress);
 
     memset(header, 0, sizeof(SlabHeader));
@@ -181,7 +179,7 @@ void* SlabAllocator::alloc(size_t size, size_t alignment)
     const uint64_t phys = BuddyAllocator::alloc(order);
     if (!phys) return nullptr;
 
-    auto base = static_cast<uint8_t*>(physicalToVirtual(phys));
+    auto base = reinterpret_cast<uint8_t*>(hhdm_request.response->offset + phys);
     auto* header = reinterpret_cast<BigHeader*>(base);
     header->magic = BIG_MAGIC;
     header->order = static_cast<uint16_t>(order);
@@ -195,13 +193,13 @@ void SlabAllocator::free(void* obj)
     if (!obj) return;
 
     const uint64_t pageBase = Alignment::alignDown(reinterpret_cast<uint64_t>(obj), FrameAllocator::SMALL_SIZE);
-    if (auto* slab = static_cast<SlabHeader*>(physicalToVirtual(pageBase)); slab->magic == SLAB_MAGIC && slab->cache)
+    if (auto* slab = reinterpret_cast<SlabHeader*>(pageBase); slab->magic == SLAB_MAGIC && slab->cache)
     {
         freeSlab(slab, obj);
         return;
     }
 
-    if (const auto* big = static_cast<BigHeader*>(physicalToVirtual(pageBase)); big->magic == BIG_MAGIC)
+    if (const auto* big = reinterpret_cast<BigHeader*>(pageBase); big->magic == BIG_MAGIC)
     {
         BuddyAllocator::free(virtualToPhysical(reinterpret_cast<void*>(pageBase)), big->order);
         return;
@@ -215,11 +213,9 @@ size_t SlabAllocator::usableSize(void* obj)
     if (!obj) return 0;
     const uint64_t pageBase = Alignment::alignDown(reinterpret_cast<uint64_t>(obj), FrameAllocator::SMALL_SIZE);
 
-    if (const auto* slab = static_cast<SlabHeader*>(physicalToVirtual(pageBase));
-        slab->magic == SLAB_MAGIC && slab->cache)
+    if (const auto* slab = reinterpret_cast<SlabHeader*>(pageBase); slab->magic == SLAB_MAGIC && slab->cache)
         return slab->cache->objectSize;
-    if (const auto* big = static_cast<BigHeader*>(physicalToVirtual(pageBase)); big->magic == BIG_MAGIC)
-        return big->objectSize;
+    if (const auto* big = reinterpret_cast<BigHeader*>(pageBase); big->magic == BIG_MAGIC) return big->objectSize;
 
     return 0;
 }

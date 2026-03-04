@@ -8,7 +8,7 @@
 struct Page
 {
     uint16_t order = 0;
-    bool free = false, head = false, reserved = true;
+    bool free = false, head = false, reserved = false;
     Page *next = nullptr, *prev = nullptr;
 };
 
@@ -18,6 +18,7 @@ struct FreeList
 };
 
 extern limine_hhdm_request hhdm_request;
+constexpr int MAX_WANTED_ORDER = 9;
 
 Spinlock buddyLock;
 uint64_t buddyBase = 0, buddySize = 0, totalPages = 0, freePages = 0;
@@ -27,10 +28,6 @@ FreeList* freeLists = nullptr;
 
 uint64_t indexFromAddress(const uint64_t address) { return (address - buddyBase) / FrameAllocator::SMALL_SIZE; }
 uint64_t addressFromIndex(const uint64_t index) { return buddyBase + index * FrameAllocator::SMALL_SIZE; }
-Page* buddyPageFromAddress(const uint64_t address) { return &pages[indexFromAddress(address)]; }
-uint64_t indexFromPage(const Page* page) { return page - pages; }
-uint64_t buddyIndex(const uint64_t index, const uint16_t order) { return index ^ (1ULL << order); }
-bool inRange(const uint64_t address) { return address >= buddyBase && address < buddyBase + buddySize; }
 
 void listRemove(const int order, Page* page)
 {
@@ -67,10 +64,13 @@ void setBlockState(const uint64_t headIndex, const int order, const bool isFree,
 
 void buildInitialFreeLists(const uint8_t* freeMask)
 {
+    for (int order = 0; order <= maxOrder; ++order) freeLists[order].head = nullptr;
+    freePages = 0;
+
     uint64_t i = 0;
     while (i < totalPages)
     {
-        if (!(freeMask[i / 8] & (1 << (i % 8))))
+        if (!(freeMask[i / 8] & (1u << (i % 8))))
         {
             ++i;
             continue;
@@ -80,11 +80,11 @@ void buildInitialFreeLists(const uint8_t* freeMask)
         for (int order = maxOrder; order >= 0; --order)
         {
             const uint64_t blockPages = 1ULL << order;
-            if (((i & (blockPages - 1)) != 0) || (i + blockPages > totalPages)) continue;
+            if ((i & (blockPages - 1)) != 0 || i + blockPages > totalPages) continue;
 
             bool ok = true;
             for (uint64_t j = 0; j < blockPages; ++j)
-                if (!(freeMask[(i + j) / 8] & (1 << ((i + j) % 8))))
+                if (!(freeMask[(i + j) / 8] & (1u << ((i + j) % 8))))
                 {
                     ok = false;
                     break;
@@ -102,6 +102,15 @@ void buildInitialFreeLists(const uint8_t* freeMask)
         freePages += 1ULL << best;
         i += 1ULL << best;
     }
+}
+
+void setFreeBit(uint8_t* mask, const uint64_t index, const bool isFree)
+{
+    const uint64_t byteIndex = index / 8;
+    const auto bitMask = static_cast<uint8_t>(1u << (index % 8));
+
+    if (isFree) mask[byteIndex] |= bitMask;
+    else mask[byteIndex] &= static_cast<uint8_t>(~bitMask);
 }
 
 bool BuddyAllocator::init()
@@ -128,70 +137,61 @@ bool BuddyAllocator::init()
     buddyBase = alignedBase;
     buddySize = alignedEnd - alignedBase;
     totalPages = buddySize / FrameAllocator::SMALL_SIZE;
+    freePages = 0;
 
-    int maxWanted = 9, maxPossible = 0;
+    int maxPossible = 0;
     while ((1ULL << (maxPossible + 1)) <= totalPages) ++maxPossible;
-    maxOrder = maxWanted < maxPossible ? maxWanted : maxPossible;
+    maxOrder = MAX_WANTED_ORDER < maxPossible ? MAX_WANTED_ORDER : maxPossible;
 
     const uint64_t pagesBytes = totalPages * sizeof(Page),
                    listsBytes = static_cast<uint64_t>(maxOrder + 1) * sizeof(FreeList),
-                   totalBytes = Alignment::alignUp(pagesBytes, FrameAllocator::SMALL_SIZE) +
-                       Alignment::alignUp(listsBytes, FrameAllocator::SMALL_SIZE),
-                   metaPages = totalBytes / FrameAllocator::SMALL_SIZE;
-
+                   metaPages = (Alignment::alignUp(pagesBytes, FrameAllocator::SMALL_SIZE) +
+                           Alignment::alignUp(listsBytes, FrameAllocator::SMALL_SIZE) +
+                           Alignment::alignUp((totalPages + 7) / 8, FrameAllocator::SMALL_SIZE)) /
+                       FrameAllocator::SMALL_SIZE;
     if (metaPages >= totalPages)
     {
         Serial::printf("BuddyAllocator: Not enough space for metadata.\n");
         return false;
     }
 
-    const auto metaPhysStart = reinterpret_cast<uint64_t>(FrameAllocator::alloc());
-    if (!metaPhysStart)
+    uint64_t metaPhys = 0;
+    for (uint64_t i = 0; i < metaPages; ++i)
     {
-        Serial::printf("BuddyAllocator: Failed to allocate metadata frame.\n");
-        return false;
-    }
-    FrameAllocator::free(reinterpret_cast<void*>(metaPhysStart));
+        void* f = FrameAllocator::alloc();
+        if (!f)
+        {
+            Serial::printf("BuddyAllocator: Failed to allocate frame for metadata.\n");
+            return false;
+        }
 
-    const uint64_t metaPhys = buddyBase, metaVirtBase = metaPhys + hhdm_request.response->offset,
-                   metaSizeBytes = metaPages * FrameAllocator::SMALL_SIZE;
-    if (metaSizeBytes + FrameAllocator::SMALL_SIZE > buddySize)
-    {
-        Serial::printf("BuddyAllocator: Not enough space for metadata.\n");
-        return false;
+        if (i == 0) metaPhys = reinterpret_cast<uint64_t>(f);
+        else if (reinterpret_cast<uint64_t>(f) != metaPhys + i * FrameAllocator::SMALL_SIZE)
+        {
+            Serial::printf("BuddyAllocator: Metadata frames are not contiguous.\n");
+            return false;
+        }
     }
 
+    const uint64_t metaVirtBase = metaPhys + hhdm_request.response->offset;
     pages = reinterpret_cast<Page*>(metaVirtBase);
     freeLists = reinterpret_cast<FreeList*>(metaVirtBase + Alignment::alignUp(pagesBytes, FrameAllocator::SMALL_SIZE));
     memset(pages, 0, totalPages * sizeof(Page));
     memset(freeLists, 0, (maxOrder + 1) * sizeof(FreeList));
 
-    auto isFree = reinterpret_cast<uint8_t*>(metaVirtBase + Alignment::alignUp(pagesBytes, FrameAllocator::SMALL_SIZE) +
+    const auto isFree = reinterpret_cast<uint8_t*>(metaVirtBase +
+        Alignment::alignUp(pagesBytes, FrameAllocator::SMALL_SIZE) +
         Alignment::alignUp(listsBytes, FrameAllocator::SMALL_SIZE));
-    const uint64_t maskBytes = totalPages, maskEnd = reinterpret_cast<uint64_t>(isFree) + maskBytes - metaVirtBase;
-    if (maskEnd > metaSizeBytes)
-    {
-        Serial::printf("BuddyAllocator: Not enough space for free mask.\n");
-        return false;
-    }
+    memset(isFree, 0, (totalPages + 7) / 8);
 
-    memset(isFree, 0, maskBytes);
-    for (uint64_t i = 0; i < totalPages; ++i)
+    for (size_t i = 0; i < totalPages; ++i)
     {
         if (i < metaPages)
         {
-            isFree[i] = 0;
+            setFreeBit(isFree, i, false);
             continue;
         }
-
-        const uint64_t phys = addressFromIndex(i);
-        if (FrameAllocator::used(reinterpret_cast<void*>(phys)))
-        {
-            isFree[i] = 0;
-            continue;
-        }
-
-        isFree[i] = 1;
+        setFreeBit(isFree, i, !FrameAllocator::used(reinterpret_cast<void*>(addressFromIndex(i))));
     }
 
     for (uint64_t i = 0; i < metaPages; ++i)
@@ -219,12 +219,12 @@ uint64_t BuddyAllocator::alloc(const int order)
     Page* block = freeLists[currentOrder].head;
     listRemove(currentOrder, block);
 
-    const uint64_t index = indexFromPage(block);
+    const uint64_t index = block - pages;
     while (currentOrder > order)
     {
         --currentOrder;
 
-        const uint64_t i = indexFromPage(block) + (1ULL << currentOrder);
+        const uint64_t i = index + (1ULL << currentOrder);
         setBlockState(i, currentOrder, true, false);
 
         Page* buddy = &pages[i];
@@ -253,22 +253,23 @@ void BuddyAllocator::free(const uint64_t address, const int order)
     if (!address || order < 0) return;
     LockGuard guard(buddyLock);
 
-    if (!pages || !freeLists) return;
-    if (!inRange(address)) return;
-    if ((address - buddyBase) % FrameAllocator::SMALL_SIZE != 0) return;
-    if (order > maxOrder) return;
+    if (!pages || !freeLists || address < buddyBase || address >= buddyBase + buddySize ||
+        (address - buddyBase) % FrameAllocator::SMALL_SIZE != 0 || order > maxOrder)
+        return;
 
     const uint64_t index = indexFromAddress(address);
-    const Page& page = pages[index];
-    if (page.reserved || page.free || !page.head || page.order != static_cast<uint16_t>(order)) return;
+    if (pages[index].reserved || pages[index].free || !pages[index].head ||
+        pages[index].order != static_cast<uint16_t>(order))
+        return;
 
     int currentOrder = order;
     uint64_t headIndex = index;
 
     while (currentOrder < maxOrder)
     {
-        const uint64_t i = buddyIndex(headIndex, currentOrder);
-        if (i >= totalPages) break;
+        if ((headIndex & ((1ULL << currentOrder) - 1)) != 0) break;
+        const uint64_t i = headIndex ^ (1ULL << currentOrder);
+        if (i >= totalPages || (i & ((1ULL << currentOrder) - 1)) != 0) break;
 
         Page& buddy = pages[i];
         if (!buddy.free || !buddy.head || buddy.reserved || buddy.order != static_cast<uint16_t>(currentOrder)) break;
@@ -286,17 +287,5 @@ void BuddyAllocator::free(const uint64_t address, const int order)
     head->reserved = false;
 
     listAdd(currentOrder, head);
-    freePages += 1ULL << order;
-}
-
-void BuddyAllocator::reserve(const uint64_t address, const uint64_t size)
-{
-    LockGuard guard(buddyLock);
-
-    if (!pages || !freeLists || size == 0) return;
-    const uint64_t start = Alignment::alignDown(address, FrameAllocator::SMALL_SIZE),
-                   end = Alignment::alignUp(address + size, FrameAllocator::SMALL_SIZE);
-
-    if (end <= start) return;
-    for (uint64_t addr = start; addr < end; addr += FrameAllocator::SMALL_SIZE) if (inRange(addr)) free(addr, 0);
+    freePages += 1ULL << currentOrder;
 }

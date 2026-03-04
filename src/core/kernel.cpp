@@ -9,8 +9,8 @@
 #include <core/panic.h>
 #include <drivers/keyboard.h>
 #include <drivers/renderer.h>
-#include <memory/paging.h>
 #include <memory/buddy.h>
+#include <memory/paging.h>
 #include <memory/slab.h>
 
 extern limine_framebuffer_request framebuffer_request;
@@ -87,12 +87,10 @@ void dumpStats()
 void initGDT()
 {
     Renderer::printf("\x1b[36mInitializing GDT... ");
-
     GDTManager::init();
     GDTManager::load();
     GDTManager::setTSS(0, SMP::getKernelStackTop(0));
     GDTManager::loadTR(0);
-
     Renderer::printf("\x1b[32mDone!\n");
 }
 
@@ -129,8 +127,8 @@ void initIOAPIC()
 
     const uint64_t ioapicVirt = madt.ioapicPhys + hhdm_request.response->offset;
     if (!Paging::map(ioapicVirt, madt.ioapicPhys, FrameAllocator::SMALL_SIZE,
-                          PageFlags::PRESENT | PageFlags::RW | PageFlags::CACHE_DISABLE | PageFlags::WRITE_THROUGH |
-                          PageFlags::GLOBAL | PageFlags::NO_EXECUTE))
+                     PageFlags::PRESENT | PageFlags::RW | PageFlags::CACHE_DISABLE | PageFlags::WRITE_THROUGH |
+                     PageFlags::GLOBAL | PageFlags::NO_EXECUTE))
     {
         Renderer::printf("\x1b[31mFailed to map IOAPIC MMIO.\x1b[0m\n");
         return;

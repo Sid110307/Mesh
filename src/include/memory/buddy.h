@@ -8,7 +8,6 @@ namespace BuddyAllocator
 
     uint64_t alloc(int order);
     void free(uint64_t address, int order);
-    void reserve(uint64_t address, uint64_t size);
 
     uint64_t getTotalPages();
     uint64_t getFreePages();
