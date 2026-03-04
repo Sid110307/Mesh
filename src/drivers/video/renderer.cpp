@@ -67,7 +67,7 @@ void scrollUnlocked()
     const size_t bytesPerLine = fbPitch, scrollBytes = (fbHeight - font.height) * bytesPerLine;
 
     memmove(fbAddress, reinterpret_cast<uint8_t*>(fbAddress) + bytesPerLine, scrollBytes);
-    memset(reinterpret_cast<uint8_t*>(fbAddress) + scrollBytes, ansiBg, font.height * bytesPerLine);
+    memset(reinterpret_cast<uint8_t*>(fbAddress) + scrollBytes, 0, font.height * bytesPerLine);
 }
 
 void printCharUnlocked(const char c, const uint32_t fg = ansiFg, const uint32_t bg = ansiBg)

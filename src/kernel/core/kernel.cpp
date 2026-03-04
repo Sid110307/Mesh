@@ -170,9 +170,7 @@ extern "C" [[noreturn]] void kernelMain()
     while (true)
     {
         while (char c = Keyboard::readChar()) Renderer::printf("%c", c);
-
-        LAPIC::sleepMs(1000);
-        Renderer::printf("\x1b[90m.\x1b[0m");
+        if (LAPIC::timerGetTicks() % 1000 == 0) Renderer::printf("\x1b[90m.\x1b[0m");
 
         asm volatile ("hlt");
     }

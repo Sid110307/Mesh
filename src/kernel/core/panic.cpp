@@ -15,8 +15,7 @@ void printHeader()
 {
     Renderer::setSerialPrint(true);
     Renderer::printf("\n\x1b[31m==================== KERNEL PANIC ====================\x1b[0m\n");
-    Renderer::printf("\x1b[90mCPU ID:\x1b[0m %u | \x1b[90mLAPIC ID:\x1b[0m %u | \x1b[90mInterrupts:\x1b[0m %s\n",
-                     SMP::getLapicID(), SMP::getLapicID(), IRQ::interruptsEnabled() ? "ON" : "OFF");
+    Renderer::printf("\x1b[90mCPU ID:\x1b[0m %u | \x1b[90mLAPIC ID:\x1b[0m %u\n", SMP::getLapicID(), SMP::getLapicID());
 }
 
 void Panic::panic(const char* fmt, ...)
@@ -45,9 +44,11 @@ void Panic::panicFrame(const InterruptFrame* frame, const char* fmt, ...)
 
     if (frame)
     {
-        Renderer::printf("\x1b[90mRIP:\x1b[0m 0x%lx  \x1b[90mRSP:\x1b[0m 0x%lx  \x1b[90mRFLAGS:\x1b[0m 0x%lx\n",
-                         frame->rip, frame->rsp, frame->rflags);
-        Renderer::printf("\x1b[90mCS:\x1b[0m  0x%lx  \x1b[90mSS:\x1b[0m  0x%lx\n", frame->cs, frame->ss);
+        Renderer::printf("\x1b[90mRIP:\x1b[0m 0x%lx | ", frame->rip);
+        Renderer::printf("\x1b[90mRSP:\x1b[0m 0x%lx\n", frame->rsp);
+        Renderer::printf("\x1b[90mRFLAGS:\x1b[0m 0x%lx | ", frame->rflags);
+        Renderer::printf("\x1b[90mCS:\x1b[0m 0x%lx | ", frame->cs);
+        Renderer::printf("\x1b[90mSS:\x1b[0m 0x%lx\n", frame->ss);
     }
 
     if (fmt && *fmt)
@@ -87,7 +88,7 @@ void Panic::printStackTrace(uint64_t basePointer, const int maxFrames)
 
         if (frame[0] <= rbp)
         {
-            Renderer::printf("\x1b[90m[Non-monotonic RBP: 0x%lx <= 0x%lx]\x1b[0m\n", frame[0], rbp);
+            Renderer::printf("\x1b[90m[Invalid frame pointer: 0x%lx]\x1b[0m\n", frame[0]);
             break;
         }
         rbp = frame[0];

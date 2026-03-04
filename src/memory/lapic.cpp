@@ -99,7 +99,7 @@ uint64_t LAPIC::timerGetTicks() { return apicTicks.load(); }
 void LAPIC::sleepMs(uint32_t ms)
 {
     if (ms == 0 || apicTimerFrequency == 0) return;
-    const uint64_t endTime = timerGetTicks() + ms;
+    const uint64_t endTime = timerGetTicks() + ms * apicTimerFrequency / 1000u;
 
     if (IRQ::interruptsEnabled()) while (timerGetTicks() < endTime) asm volatile("hlt");
     else timerWaitTicks((endTime - timerGetTicks()) * apicTimerFrequency / 1000u);
