@@ -285,11 +285,12 @@ void decodeByte(const uint8_t scancode, Keyboard::Event& outEvent, bool& produce
         if (decodeState.pauseLength < sizeof(decodeState.pauseBuffer))
             decodeState.pauseBuffer[decodeState.pauseLength++] = scancode;
 
-        static const uint8_t pauseSet1[] = {0x1D, 0x45, 0xE1, 0x9D, 0xC5};
         if (decodeState.pauseLength == 5)
         {
             bool match = true;
-            for (int i = 0; i < 5; ++i) if (decodeState.pauseBuffer[i] != pauseSet1[i]) match = false;
+            for (int i = 0; i < 5; ++i)
+                if (const uint8_t set[] = {0x1D, 0x45, 0xE1, 0x9D, 0xC5}; decodeState.pauseBuffer[i] != set[i])
+                    match = false;
 
             decodeState.prefixE1 = false;
             decodeState.pauseLength = 0;
@@ -439,7 +440,7 @@ void pushEvent(const Keyboard::Event& event)
 bool consumeByte()
 {
     if (!(inb(STATUS_PORT) & STATUS_OUTPUT_BUFFER)) return false;
-    LockGuardIRQ guard(lock);
+    LockGuard guard(lock);
 
     const uint8_t scancode = readData();
     Keyboard::Event e = {};
@@ -460,7 +461,7 @@ bool consumeByte()
 
 void Keyboard::init()
 {
-    LockGuardIRQ guard(lock);
+    LockGuard guard(lock);
     if (keyboardInitialized) return;
 
     writeCommand(0xAD);
@@ -489,7 +490,7 @@ void Keyboard::irq() { while (consumeByte()); }
 
 bool Keyboard::readEvent(Event& event)
 {
-    LockGuardIRQ guard(lock);
+    LockGuard guard(lock);
     if (eventQueue.count == 0) return false;
 
     event = eventQueue.events[eventQueue.head];
@@ -509,13 +510,13 @@ char Keyboard::readChar()
 
 Keyboard::Modifiers Keyboard::getModifiers()
 {
-    LockGuardIRQ guard(lock);
+    LockGuard guard(lock);
     return currentModifiers;
 }
 
 void Keyboard::clear()
 {
-    LockGuardIRQ guard(lock);
+    LockGuard guard(lock);
     eventQueue = Queue{};
     decodeState = {};
 }

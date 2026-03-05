@@ -23,23 +23,24 @@
 - [x] Serial (UART) console output
 - [x] Framebuffer text + ANSI color output
 - [x] Keyboard driver (PS/2)
+- [ ] Mouse driver (PS/2)
 - [x] LAPIC timer interrupts and sleep functions
 - [x] Kernel panic and stack trace
 - [x] Kernel heap allocator (buddy and slab)
+- [x] Per-CPU data structures
+- [x] Kernel threads
+- [x] Scheduler
+- [x] Context switching
 
 #### Planned
 
 - [ ] Virtual memory management
-- [ ] Per-CPU data structures
-- [ ] Scheduler
-- [ ] Mouse driver (PS/2)
-- [ ] Context switching
-- [ ] Userspace syscall interface
-- [ ] Per-process virtual address spaces
+- [ ] Process management and address spaces
 - [ ] Memory protection and COW
 
-#### Future
+#### Future (userland)
 
+- [ ] Syscall interface
 - [ ] ELF loader
 - [ ] VFS layer
 - [ ] Filesystem (FAT32, ext2, etc.)
@@ -47,7 +48,7 @@
 - [ ] Storage drivers (AHCI, NVMe, etc.)
 - [ ] USB drivers
 - [ ] Better terminal (scrolling, cursor, line editing, etc.)
-- [ ] Framebuffer graphics primitives (2D/3D drawing, mouse cursor, etc.)
+- [ ] Framebuffer graphics primitives (2D/3D drawing, font rendering, etc.)
 - [ ] Window compositor
 - [ ] Networking (TCP/IP stack, Ethernet drivers, etc.)
 - [ ] IPC event system

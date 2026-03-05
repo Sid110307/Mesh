@@ -1,4 +1,4 @@
-#include <arch/x86_64/irq.h>
+#include <arch/x86_64/isr.h>
 #include <memory/spinlock.h>
 
 Spinlock::Spinlock() : locked(0) {}
@@ -14,19 +14,18 @@ bool Spinlock::tryLock()
 
 bool Spinlock::isLocked() const { return __atomic_load_n(&locked, __ATOMIC_RELAXED); }
 
-LockGuard::LockGuard(Spinlock& l) : lock(l) { lock.lock(); }
-LockGuard::~LockGuard() { lock.unlock(); }
-
-LockGuardIRQ::LockGuardIRQ(Spinlock& l) : lock(l)
+LockGuard::LockGuard(Spinlock& l, bool hasInterrupts) : lock(l), hasInterrupts(hasInterrupts)
 {
-    asm volatile ("pushfq\npopq %0" : "=r"(rflags) :: "memory");
-    IRQ::disableInterrupts();
-
+    if (hasInterrupts)
+    {
+        asm volatile ("pushfq\npopq %0" : "=r"(rflags) :: "memory");
+        Interrupt::disableInterrupts();
+    }
     lock.lock();
 }
 
-LockGuardIRQ::~LockGuardIRQ()
+LockGuard::~LockGuard()
 {
     lock.unlock();
-    asm volatile("pushq %0\npopfq" :: "r"(rflags) : "memory");
+    if (hasInterrupts) asm volatile ("pushq %0\npopfq" :: "r"(rflags) : "memory");
 }

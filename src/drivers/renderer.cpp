@@ -32,8 +32,8 @@ void drawGlyph(const uint32_t px, const uint32_t py, const char c, const uint32_
         Serial::printf("Renderer: Cannot draw glyph, framebuffer or font not initialized.\n");
         return;
     }
-    if (font.height == 0 || font.width == 0 || static_cast<uint8_t>(c) >= font.glyphCount || px +
-        font.width > fbWidth || py + font.height > fbHeight)
+    if (font.height == 0 || font.width == 0 || static_cast<uint8_t>(c) >= font.glyphCount ||
+        px + font.width > fbWidth || py + font.height > fbHeight)
     {
         Serial::printf("Renderer: Invalid glyph or position for drawing.\n");
         return;
@@ -42,7 +42,7 @@ void drawGlyph(const uint32_t px, const uint32_t py, const char c, const uint32_
     const uint8_t* glyph = font.glyphBuffer + static_cast<uint8_t>(c) * font.height;
     for (uint32_t y = 0; y < font.height && py + y < fbHeight; ++y)
         for (uint32_t x = 0; x < font.width && px + x < fbWidth; ++x)
-            fbAddress[(py + y) * (fbPitch / 4) + (px + x)] = glyph[y] & 1 << (7 - x) ? fg : bg;
+            fbAddress[(py + y) * (fbPitch / sizeof(uint32_t)) + (px + x)] = glyph[y] & (1 << (7 - x)) ? fg : bg;
 }
 
 void clearUnlocked(const uint32_t color)
@@ -53,7 +53,7 @@ void clearUnlocked(const uint32_t color)
         return;
     }
 
-    for (size_t i = 0; i < fbPitch / 4 * fbHeight; ++i) fbAddress[i] = color;
+    for (size_t i = 0; i < fbPitch / sizeof(uint32_t) * fbHeight; ++i) fbAddress[i] = color;
     cursorX = cursorY = 0;
 }
 
@@ -66,7 +66,7 @@ void scrollUnlocked()
     }
     const size_t bytesPerLine = fbPitch, scrollBytes = (fbHeight - font.height) * bytesPerLine;
 
-    memmove(fbAddress, reinterpret_cast<uint8_t*>(fbAddress) + bytesPerLine, scrollBytes);
+    memmove(fbAddress, reinterpret_cast<uint8_t*>(fbAddress) + font.height * bytesPerLine, scrollBytes);
     memset(reinterpret_cast<uint8_t*>(fbAddress) + scrollBytes, 0, font.height * bytesPerLine);
 }
 
@@ -166,7 +166,12 @@ void printUnlocked(const char* str, const uint32_t fg = ansiFg, const uint32_t b
 
                 continue;
             }
-            if (escLen + 1 < static_cast<int>(sizeof(escBuf))) escBuf[escLen++] = c;
+            if (escLen < static_cast<int>(sizeof(escBuf)) - 1) escBuf[escLen++] = c;
+            else
+            {
+                inEscape = false;
+                escLen = 0;
+            }
 
             continue;
         }
@@ -202,8 +207,7 @@ void ansiPutChar(const char c)
 
     if (inEscape)
     {
-        if (escLen < sizeof(escBuf) - 1)
-            escBuf[escLen++] = c;
+        if (escLen < sizeof(escBuf) - 1) escBuf[escLen++] = c;
 
         if (c == 'm')
         {
@@ -498,6 +502,12 @@ void Renderer::printDecAt(const uint32_t x, const uint32_t y, const uint64_t val
 
 void Renderer::setCursor(const uint32_t x, const uint32_t y)
 {
+    if (!fbReady())
+    {
+        Serial::printf("Renderer: Cannot set cursor, framebuffer not initialized.\n");
+        return;
+    }
+
     cursorX = x >= fbWidth / font.width ? fbWidth / font.width - 1 : x;
     cursorY = y >= fbHeight / font.height ? fbHeight / font.height - 1 : y;
 }

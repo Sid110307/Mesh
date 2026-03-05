@@ -12,8 +12,8 @@ namespace SMP
     void init();
     void detectCPUFeatures();
     uint32_t getCpuCount();
-    uint32_t getLapicID();
-    uint64_t getKernelStackTop(uint32_t cpuID);
+    uint32_t getLapicId();
+    uint64_t getKernelStackTop(uint32_t cpuId);
     uint64_t getLapicBase();
     CPUFeatures getCPUFeatures();
 

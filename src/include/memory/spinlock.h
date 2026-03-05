@@ -19,19 +19,11 @@ private:
 class LockGuard
 {
 public:
-    explicit LockGuard(Spinlock& l);
+    explicit LockGuard(Spinlock& l, bool hasInterrupts = true);
     ~LockGuard();
-
-    Spinlock& lock;
-};
-
-class LockGuardIRQ
-{
-public:
-    explicit LockGuardIRQ(Spinlock& l);
-    ~LockGuardIRQ();
 
 private:
     uint64_t rflags = 0;
     Spinlock& lock;
+    bool hasInterrupts;
 };

@@ -1,4 +1,4 @@
-#include <arch/x86_64/irq.h>
+#include <arch/x86_64/isr.h>
 #include <arch/x86_64/lapic.h>
 #include <drivers/serial.h>
 #include <memory/atomic.h>
@@ -35,7 +35,7 @@ uint32_t timerRead() { return apicTimerPort == 0 ? 0 : inl(apicTimerPort) & 0x00
 void timerWaitTicks(const uint32_t ticks)
 {
     const uint32_t start = timerRead();
-    while (((timerRead() - start) & 0x00FFFFFFu) < ticks) asm volatile("pause");
+    while (((timerRead() - start) & 0x00FFFFFFu) < ticks) asm volatile ("pause");
 }
 
 void LAPIC::init(const uint64_t virtBase)
@@ -99,14 +99,14 @@ uint64_t LAPIC::timerGetTicks() { return apicTicks.load(); }
 void LAPIC::sleepMs(uint32_t ms)
 {
     if (ms == 0 || apicTimerFrequency == 0) return;
-    if (!IRQ::interruptsEnabled())
+    if (!Interrupt::interruptsEnabled())
     {
         Serial::printf("LAPIC: Cannot sleep with interrupts disabled.\n");
         return;
     }
 
-    const uint64_t endTime = timerGetTicks() + ms * apicTimerFrequency / 1000u;
-    while (timerGetTicks() < endTime) asm volatile("hlt");
+    const uint64_t endTime = timerGetTicks() + ms;
+    while (timerGetTicks() < endTime) asm volatile ("hlt");
 }
 
 void IOAPIC::init(const uint64_t virtBase, const uint32_t irqBase)
