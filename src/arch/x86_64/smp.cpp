@@ -1,6 +1,7 @@
+#include <arch/x86_64/cpu.h>
 #include <arch/x86_64/gdt.h>
 #include <arch/x86_64/idt.h>
-#include <arch/x86_64/irq.h>
+#include <arch/x86_64/isr.h>
 #include <arch/x86_64/smp.h>
 #include <core/limine.h>
 #include <drivers/renderer.h>
@@ -11,7 +12,7 @@
 struct ApBootInfo
 {
     uint64_t stackTop;
-    uint32_t cpuID;
+    uint32_t cpuId;
 };
 
 extern limine_hhdm_request hhdm_request;
@@ -27,17 +28,19 @@ ApBootInfo apBoot[SMP::MAX_CPUS] = {};
 uint32_t apCount = 0;
 Atomic apReadyCount{0};
 SMP::CPUFeatures cpuFeatures = {};
-uint32_t cpuCount = 0, cpuIDs[SMP::MAX_CPUS] = {};
+uint32_t cpuCount = 0, cpuIds[SMP::MAX_CPUS] = {};
 uint64_t lapicPhysBase = 0, lapicVirtBase = 0;
 
-extern "C" [[noreturn]] void apMain(uint32_t cpuID)
+extern "C" void apMain(uint32_t cpuId)
 {
     GDTManager::load();
     IDTManager::load();
-    GDTManager::loadTR(cpuID);
-    apReadyCount.increment();
+    GDTManager::loadTR(cpuId);
+    CPUManager::initCPU(cpuId, SMP::getLapicId());
 
-    IRQ::enableInterrupts();
+    apReadyCount.increment();
+    Interrupt::enableInterrupts();
+
     while (true) asm volatile ("hlt");
 }
 
@@ -61,7 +64,7 @@ void SMP::init()
         return;
     }
 
-    uint32_t logicalID = 0;
+    uint32_t logicalId = 0;
     apCount = 0;
 
     for (uint32_t i = 0; i < cpuCount; ++i)
@@ -70,33 +73,33 @@ void SMP::init()
         if (!cpu) continue;
 
         const bool isBSP = cpu->lapic_id == mp_request.response->bsp_lapic_id;
-        if (!isBSP && logicalID >= MAX_CPUS)
+        if (!isBSP && logicalId >= MAX_CPUS)
         {
             Renderer::printf("\x1b[31m[SMP] Too many CPUs! Ignoring LAPIC ID %u.\x1b[0m\n", cpu->lapic_id);
             continue;
         }
 
-        cpuIDs[logicalID] = cpu->lapic_id;
-        GDTManager::setTSS(logicalID, reinterpret_cast<uint64_t>(&kernelStacks[logicalID][SMP_STACK_SIZE]));
+        cpuIds[logicalId] = cpu->lapic_id;
+        GDTManager::setTSS(logicalId, reinterpret_cast<uint64_t>(&kernelStacks[logicalId][SMP_STACK_SIZE]));
 
         if (!isBSP)
         {
-            apBoot[logicalID].stackTop = (reinterpret_cast<uint64_t>(&apStacks[logicalID][0]) + SMP_STACK_SIZE) & ~
+            apBoot[logicalId].stackTop = (reinterpret_cast<uint64_t>(&apStacks[logicalId][0]) + SMP_STACK_SIZE) & ~
                 0xFULL;
-            apBoot[logicalID].cpuID = logicalID;
+            apBoot[logicalId].cpuId = logicalId;
 
-            cpu->extra_argument = reinterpret_cast<uint64_t>(&apBoot[logicalID]);
+            cpu->extra_argument = reinterpret_cast<uint64_t>(&apBoot[logicalId]);
             __atomic_thread_fence(__ATOMIC_RELEASE);
             cpu->goto_address = reinterpret_cast<uint8_t*>(trampoline);
 
-            Renderer::printf("\x1b[33m[AP] Queued core (LAPIC ID %u) as CPU ID %u.\x1b[0m\n", cpu->lapic_id, logicalID);
+            Renderer::printf("\x1b[33m[AP] Queued core (LAPIC ID %u) as CPU ID %u.\x1b[0m\n", cpu->lapic_id, logicalId);
             apCount++;
         }
 
-        logicalID++;
+        logicalId++;
     }
 
-    cpuCount = logicalID;
+    cpuCount = logicalId;
     uint32_t expectedAPs = apCount;
 
     int timeout = 1000000;
@@ -126,7 +129,7 @@ void SMP::detectCPUFeatures()
 
 uint32_t SMP::getCpuCount() { return cpuCount; }
 
-uint32_t SMP::getLapicID()
+uint32_t SMP::getLapicId()
 {
     uint32_t low, high;
     asm volatile ("rdmsr" : "=a"(low), "=d"(high) : "c"(0x1B));
@@ -143,10 +146,10 @@ uint32_t SMP::getLapicID()
     return lapic[0x20 / 4] >> 24;
 }
 
-uint64_t SMP::getKernelStackTop(const uint32_t cpuID)
+uint64_t SMP::getKernelStackTop(const uint32_t cpuId)
 {
-    if (cpuID >= cpuCount) return 0;
-    return reinterpret_cast<uint64_t>(&kernelStacks[cpuID][SMP_STACK_SIZE]);
+    if (cpuId >= cpuCount) return 0;
+    return reinterpret_cast<uint64_t>(&kernelStacks[cpuId][SMP_STACK_SIZE]);
 }
 
 uint64_t SMP::getLapicBase() { return lapicVirtBase; }

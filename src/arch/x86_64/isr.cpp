@@ -32,7 +32,7 @@ const char* exceptionName(const uint64_t intNum)
     }
 }
 
-void showException(const InterruptFrame* frame, const uint64_t intNum, const uint64_t errorCode)
+void showException(const Interrupt::Frame* frame, const uint64_t intNum, const uint64_t errorCode)
 {
     if (intNum == 13)
     {
@@ -49,7 +49,7 @@ void showException(const InterruptFrame* frame, const uint64_t intNum, const uin
     else if (intNum == 14)
     {
         uint64_t cr2 = 0;
-        asm volatile("mov %%cr2, %0" : "=r"(cr2));
+        asm volatile ("mov %%cr2, %0" : "=r"(cr2));
 
         Panic::panicFrame(frame, "%s\nCR2: 0x%lx\nError code: 0x%lx (P: %lu W: %lu U: %lu RS: %lu IF: %lu)",
                           exceptionName(intNum), cr2, errorCode, (errorCode & 1ULL) != 0, (errorCode & 2ULL) != 0,
@@ -58,49 +58,54 @@ void showException(const InterruptFrame* frame, const uint64_t intNum, const uin
     else Panic::panicFrame(frame, "%s", exceptionName(intNum));
 }
 
-extern "C" {
-__attribute__ ((interrupt)) void isr0(const InterruptFrame* f) { showException(f, 0, 0); }
-__attribute__ ((interrupt)) void isr1(const InterruptFrame* f) { showException(f, 1, 0); }
-__attribute__ ((interrupt)) void isr2(const InterruptFrame* f) { showException(f, 2, 0); }
-__attribute__ ((interrupt)) void isr3(const InterruptFrame* f) { showException(f, 3, 0); }
-__attribute__ ((interrupt)) void isr4(const InterruptFrame* f) { showException(f, 4, 0); }
-__attribute__ ((interrupt)) void isr5(const InterruptFrame* f) { showException(f, 5, 0); }
-__attribute__ ((interrupt)) void isr6(const InterruptFrame* f) { showException(f, 6, 0); }
-__attribute__ ((interrupt)) void isr7(const InterruptFrame* f) { showException(f, 7, 0); }
-__attribute__ ((interrupt)) void isr8(const InterruptFrame* f, const uint64_t e) { showException(f, 8, e); }
-__attribute__ ((interrupt)) void isr9(const InterruptFrame* f) { showException(f, 9, 0); }
-__attribute__ ((interrupt)) void isr10(const InterruptFrame* f, const uint64_t e) { showException(f, 10, e); }
-__attribute__ ((interrupt)) void isr11(const InterruptFrame* f, const uint64_t e) { showException(f, 11, e); }
-__attribute__ ((interrupt)) void isr12(const InterruptFrame* f, const uint64_t e) { showException(f, 12, e); }
-__attribute__ ((interrupt)) void isr13(const InterruptFrame* f, const uint64_t e) { showException(f, 13, e); }
-__attribute__ ((interrupt)) void isr14(const InterruptFrame* f, const uint64_t e) { showException(f, 14, e); }
-__attribute__ ((interrupt)) void isr15(const InterruptFrame* f) { showException(f, 15, 0); }
-__attribute__ ((interrupt)) void isr16(const InterruptFrame* f) { showException(f, 16, 0); }
-__attribute__ ((interrupt)) void isr17(const InterruptFrame* f, const uint64_t e) { showException(f, 17, e); }
-__attribute__ ((interrupt)) void isr18(const InterruptFrame* f) { showException(f, 18, 0); }
-__attribute__ ((interrupt)) void isr19(const InterruptFrame* f) { showException(f, 19, 0); }
-__attribute__ ((interrupt)) void isr20(const InterruptFrame* f) { showException(f, 20, 0); }
-__attribute__ ((interrupt)) void isr21(const InterruptFrame* f) { showException(f, 21, 0); }
-__attribute__ ((interrupt)) void isr22(const InterruptFrame* f) { showException(f, 22, 0); }
-__attribute__ ((interrupt)) void isr23(const InterruptFrame* f) { showException(f, 23, 0); }
-__attribute__ ((interrupt)) void isr24(const InterruptFrame* f) { showException(f, 24, 0); }
-__attribute__ ((interrupt)) void isr25(const InterruptFrame* f) { showException(f, 25, 0); }
-__attribute__ ((interrupt)) void isr26(const InterruptFrame* f) { showException(f, 26, 0); }
-__attribute__ ((interrupt)) void isr27(const InterruptFrame* f) { showException(f, 27, 0); }
-__attribute__ ((interrupt)) void isr28(const InterruptFrame* f) { showException(f, 28, 0); }
-__attribute__ ((interrupt)) void isr29(const InterruptFrame* f) { showException(f, 29, 0); }
-__attribute__ ((interrupt)) void isr30(const InterruptFrame* f) { showException(f, 30, 0); }
-__attribute__ ((interrupt)) void isr31(const InterruptFrame* f) { showException(f, 31, 0); }
-
-__attribute__ ((interrupt)) void isrKeyboard(InterruptFrame*)
+bool Interrupt::interruptsEnabled()
 {
-    Keyboard::irq();
-    LAPIC::sendEOI();
+    uint64_t rflags;
+    asm volatile ("pushfq\npopq %0" : "=r"(rflags) :: "memory");
+
+    return (rflags & (1ULL << 9)) != 0;
 }
 
-__attribute__ ((interrupt)) void isrTimer(InterruptFrame*)
+void Interrupt::enableInterrupts() { asm volatile ("sti" ::: "memory"); }
+void Interrupt::disableInterrupts() { asm volatile ("cli" ::: "memory"); }
+
+extern "C" {
+__attribute__ ((interrupt)) void isr0(const Interrupt::Frame* f) { showException(f, 0, 0); }
+__attribute__ ((interrupt)) void isr1(const Interrupt::Frame* f) { showException(f, 1, 0); }
+__attribute__ ((interrupt)) void isr2(const Interrupt::Frame* f) { showException(f, 2, 0); }
+__attribute__ ((interrupt)) void isr3(const Interrupt::Frame* f) { showException(f, 3, 0); }
+__attribute__ ((interrupt)) void isr4(const Interrupt::Frame* f) { showException(f, 4, 0); }
+__attribute__ ((interrupt)) void isr5(const Interrupt::Frame* f) { showException(f, 5, 0); }
+__attribute__ ((interrupt)) void isr6(const Interrupt::Frame* f) { showException(f, 6, 0); }
+__attribute__ ((interrupt)) void isr7(const Interrupt::Frame* f) { showException(f, 7, 0); }
+__attribute__ ((interrupt)) void isr8(const Interrupt::Frame* f, const uint64_t e) { showException(f, 8, e); }
+__attribute__ ((interrupt)) void isr9(const Interrupt::Frame* f) { showException(f, 9, 0); }
+__attribute__ ((interrupt)) void isr10(const Interrupt::Frame* f, const uint64_t e) { showException(f, 10, e); }
+__attribute__ ((interrupt)) void isr11(const Interrupt::Frame* f, const uint64_t e) { showException(f, 11, e); }
+__attribute__ ((interrupt)) void isr12(const Interrupt::Frame* f, const uint64_t e) { showException(f, 12, e); }
+__attribute__ ((interrupt)) void isr13(const Interrupt::Frame* f, const uint64_t e) { showException(f, 13, e); }
+__attribute__ ((interrupt)) void isr14(const Interrupt::Frame* f, const uint64_t e) { showException(f, 14, e); }
+__attribute__ ((interrupt)) void isr15(const Interrupt::Frame* f) { showException(f, 15, 0); }
+__attribute__ ((interrupt)) void isr16(const Interrupt::Frame* f) { showException(f, 16, 0); }
+__attribute__ ((interrupt)) void isr17(const Interrupt::Frame* f, const uint64_t e) { showException(f, 17, e); }
+__attribute__ ((interrupt)) void isr18(const Interrupt::Frame* f) { showException(f, 18, 0); }
+__attribute__ ((interrupt)) void isr19(const Interrupt::Frame* f) { showException(f, 19, 0); }
+__attribute__ ((interrupt)) void isr20(const Interrupt::Frame* f) { showException(f, 20, 0); }
+__attribute__ ((interrupt)) void isr21(const Interrupt::Frame* f) { showException(f, 21, 0); }
+__attribute__ ((interrupt)) void isr22(const Interrupt::Frame* f) { showException(f, 22, 0); }
+__attribute__ ((interrupt)) void isr23(const Interrupt::Frame* f) { showException(f, 23, 0); }
+__attribute__ ((interrupt)) void isr24(const Interrupt::Frame* f) { showException(f, 24, 0); }
+__attribute__ ((interrupt)) void isr25(const Interrupt::Frame* f) { showException(f, 25, 0); }
+__attribute__ ((interrupt)) void isr26(const Interrupt::Frame* f) { showException(f, 26, 0); }
+__attribute__ ((interrupt)) void isr27(const Interrupt::Frame* f) { showException(f, 27, 0); }
+__attribute__ ((interrupt)) void isr28(const Interrupt::Frame* f) { showException(f, 28, 0); }
+__attribute__ ((interrupt)) void isr29(const Interrupt::Frame* f) { showException(f, 29, 0); }
+__attribute__ ((interrupt)) void isr30(const Interrupt::Frame* f) { showException(f, 30, 0); }
+__attribute__ ((interrupt)) void isr31(const Interrupt::Frame* f) { showException(f, 31, 0); }
+
+__attribute__ ((interrupt)) void isrKeyboard(Interrupt::Frame*)
 {
-    LAPIC::timerIrq();
+    Keyboard::irq();
     LAPIC::sendEOI();
 }
 }

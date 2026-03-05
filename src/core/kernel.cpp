@@ -1,7 +1,7 @@
 #include <arch/x86_64/acpi.h>
+#include <arch/x86_64/cpu.h>
 #include <arch/x86_64/gdt.h>
 #include <arch/x86_64/idt.h>
-#include <arch/x86_64/irq.h>
 #include <arch/x86_64/isr.h>
 #include <arch/x86_64/lapic.h>
 #include <arch/x86_64/smp.h>
@@ -20,6 +20,12 @@ extern limine_executable_address_request executable_addr_request;
 extern limine_mp_request mp_request;
 extern limine_date_at_boot_request date_at_boot_request;
 
+extern "C" void isrTimer();
+extern "C" void isrYield();
+
+Scheduler::Scheduler schedulers[SMP::MAX_CPUS];
+void idleTask(void*) { while (true) asm volatile ("hlt"); }
+
 void initSIMD()
 {
     SMP::detectCPUFeatures();
@@ -31,16 +37,16 @@ void initSIMD()
 
     uint64_t cr0, cr4;
 
-    asm volatile("mov %%cr0, %0" : "=r"(cr0));
+    asm volatile ("mov %%cr0, %0" : "=r"(cr0));
     cr0 &= ~(1ULL << 2);
     cr0 |= (1ULL << 1) | (1ULL << 5);
-    asm volatile("mov %0, %%cr0" :: "r"(cr0));
+    asm volatile ("mov %0, %%cr0" :: "r"(cr0));
 
-    asm volatile("mov %%cr4, %0" : "=r"(cr4));
+    asm volatile ("mov %%cr4, %0" : "=r"(cr4));
     cr4 |= (1ULL << 9) | (1ULL << 10);
-    asm volatile("mov %0, %%cr4" :: "r"(cr4));
+    asm volatile ("mov %0, %%cr4" :: "r"(cr4));
 
-    asm volatile("fninit");
+    asm volatile ("fninit");
 }
 
 void initRenderer()
@@ -99,7 +105,8 @@ void initIDT()
     Renderer::printf("\x1b[36mInitializing IDT... ");
     IDTManager::init();
     IDTManager::setEntry(0x21, reinterpret_cast<void(*)()>(isrKeyboard), 0x8E, 0);
-    IDTManager::setEntry(0x22, reinterpret_cast<void(*)()>(isrTimer), 0x8E, 0);
+    IDTManager::setEntry(0x22, isrTimer, 0x8E, 0);
+    IDTManager::setEntry(0x80, isrYield, 0x8E, 0);
     IDTManager::load();
     Renderer::printf("\x1b[32mDone!\n");
 }
@@ -160,6 +167,15 @@ extern "C" [[noreturn]] void kernelMain()
     initIDT();
     SMP::init();
     LAPIC::init(SMP::getLapicBase());
+    CPUManager::initCPU(0, mp_request.response->bsp_lapic_id);
+
+    CPU* cpu = CPUManager::getCurrentCPU();
+    cpu->scheduler = &schedulers[0];
+
+    Task::Task* idle = Task::taskCreate(idleTask, nullptr, 0);
+    cpu->idleTask = idle;
+    cpu->currentTask = idle;
+    Scheduler::initCPU(cpu->scheduler, idle);
 
     initIOAPIC();
     Keyboard::init();
@@ -169,11 +185,17 @@ extern "C" [[noreturn]] void kernelMain()
     LAPIC::timerCalibrate(10);
     LAPIC::timerPeriodic();
 
-    IRQ::enableInterrupts();
+    Interrupt::enableInterrupts();
     while (true)
     {
         while (char c = Keyboard::readChar()) Renderer::printf("%c", c);
-        if (LAPIC::timerGetTicks() % 1000 == 0) Renderer::printf("\x1b[90m.\x1b[0m");
+
+        static uint64_t last = 0;
+        if (const uint64_t now = LAPIC::timerGetTicks(); now / 1000 != last / 1000)
+        {
+            Renderer::printf("\x1b[90m.\x1b[0m");
+            last = now;
+        }
 
         asm volatile ("hlt");
     }
