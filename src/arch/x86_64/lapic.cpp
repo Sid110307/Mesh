@@ -1,4 +1,4 @@
-#include <arch/x86_64/irq.h>
+#include <arch/x86_64/isr.h>
 #include <arch/x86_64/lapic.h>
 #include <drivers/serial.h>
 #include <memory/atomic.h>
@@ -99,7 +99,7 @@ uint64_t LAPIC::timerGetTicks() { return apicTicks.load(); }
 void LAPIC::sleepMs(uint32_t ms)
 {
     if (ms == 0 || apicTimerFrequency == 0) return;
-    if (!IRQ::interruptsEnabled())
+    if (!Interrupt::interruptsEnabled())
     {
         Serial::printf("LAPIC: Cannot sleep with interrupts disabled.\n");
         return;

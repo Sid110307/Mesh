@@ -285,11 +285,12 @@ void decodeByte(const uint8_t scancode, Keyboard::Event& outEvent, bool& produce
         if (decodeState.pauseLength < sizeof(decodeState.pauseBuffer))
             decodeState.pauseBuffer[decodeState.pauseLength++] = scancode;
 
-        static const uint8_t pauseSet1[] = {0x1D, 0x45, 0xE1, 0x9D, 0xC5};
         if (decodeState.pauseLength == 5)
         {
             bool match = true;
-            for (int i = 0; i < 5; ++i) if (decodeState.pauseBuffer[i] != pauseSet1[i]) match = false;
+            for (int i = 0; i < 5; ++i)
+                if (const uint8_t set[] = {0x1D, 0x45, 0xE1, 0x9D, 0xC5}; decodeState.pauseBuffer[i] != set[i])
+                    match = false;
 
             decodeState.prefixE1 = false;
             decodeState.pauseLength = 0;

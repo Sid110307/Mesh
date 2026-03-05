@@ -1,4 +1,4 @@
-#include <arch/x86_64/irq.h>
+#include <arch/x86_64/isr.h>
 #include <arch/x86_64/smp.h>
 #include <core/panic.h>
 #include <drivers/renderer.h>
@@ -15,12 +15,12 @@ void printHeader()
 {
     Renderer::setSerialPrint(true);
     Renderer::printf("\n\x1b[31m==================== KERNEL PANIC ====================\x1b[0m\n");
-    Renderer::printf("\x1b[90mCPU ID:\x1b[0m %u | \x1b[90mLAPIC ID:\x1b[0m %u\n", SMP::getLapicID(), SMP::getLapicID());
+    Renderer::printf("\x1b[90mCPU ID:\x1b[0m %u | \x1b[90mLAPIC ID:\x1b[0m %u\n", SMP::getLapicId(), SMP::getLapicId());
 }
 
 void Panic::panic(const char* fmt, ...)
 {
-    IRQ::disableInterrupts();
+    Interrupt::disableInterrupts();
     printHeader();
 
     va_list args;
@@ -37,9 +37,9 @@ void Panic::panic(const char* fmt, ...)
     while (true) asm volatile("hlt");
 }
 
-void Panic::panicFrame(const InterruptFrame* frame, const char* fmt, ...)
+void Panic::panicFrame(const Interrupt::Frame* frame, const char* fmt, ...)
 {
-    IRQ::disableInterrupts();
+    Interrupt::disableInterrupts();
     printHeader();
 
     if (frame)

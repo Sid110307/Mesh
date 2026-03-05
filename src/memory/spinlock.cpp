@@ -1,4 +1,4 @@
-#include <arch/x86_64/irq.h>
+#include <arch/x86_64/isr.h>
 #include <memory/spinlock.h>
 
 Spinlock::Spinlock() : locked(0) {}
@@ -20,7 +20,7 @@ LockGuard::~LockGuard() { lock.unlock(); }
 LockGuardIRQ::LockGuardIRQ(Spinlock& l) : lock(l)
 {
     asm volatile ("pushfq\npopq %0" : "=r"(rflags) :: "memory");
-    IRQ::disableInterrupts();
+    Interrupt::disableInterrupts();
 
     lock.lock();
 }
