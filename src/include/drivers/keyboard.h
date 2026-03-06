@@ -46,6 +46,7 @@ namespace Keyboard
 
     void init();
     void irq();
+    void service();
 
     bool readEvent(Event& event);
     char readChar();

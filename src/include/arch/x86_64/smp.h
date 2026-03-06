@@ -6,7 +6,8 @@ namespace SMP
 {
     struct CPUFeatures
     {
-        bool hasSSE, hasSSE2, hasSSE3, hasSSE4_1, hasSSE4_2, hasAVX;
+        bool hasSSE, hasSSE2, hasSSE3, hasSSE4_1, hasSSE4_2, hasXSAVE, hasOSXSAVE, hasAVX, hasAVXUsable, hasNX,
+             hasX2APIC, hasTSCDeadline, hasPAT;
     };
 
     void init();

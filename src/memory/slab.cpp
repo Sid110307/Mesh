@@ -35,9 +35,13 @@ struct BigHeader
 extern limine_hhdm_request hhdm_request;
 
 constexpr uint32_t SLAB_MAGIC = 0xDEADBEEF, BIG_MAGIC = 0xB16B00B5;
-
 constexpr size_t classes[] = {8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096},
                  numClasses = sizeof(classes) / sizeof(classes[0]);
+constexpr const char* cacheNames[] = {
+    "SlabCache-8", "SlabCache-16", "SlabCache-32", "SlabCache-64", "SlabCache-128", "SlabCache-256", "SlabCache-512",
+    "SlabCache-1024", "SlabCache-2048", "SlabCache-4096"
+};
+
 SlabCache slabCaches[numClasses] = {};
 
 uint64_t virtualToPhysical(void* virt)
@@ -157,7 +161,7 @@ bool SlabAllocator::init()
 {
     for (size_t i = 0; i < numClasses; ++i)
     {
-        slabCaches[i].name = "SlabCache";
+        slabCaches[i].name = cacheNames[i];
         slabCaches[i].objectSize = classes[i];
         slabCaches[i].alignment = 16;
         slabCaches[i].partial = nullptr;
@@ -205,7 +209,7 @@ void SlabAllocator::free(void* obj)
         return;
     }
 
-    Serial::printf("SlabAllocator: Attempted to free invalid pointer %p.\n", obj);
+    Serial::printf("SlabAllocator: Attempted to free invalid pointer %p\n", obj);
 }
 
 size_t SlabAllocator::usableSize(void* obj)

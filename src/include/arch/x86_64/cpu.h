@@ -9,8 +9,8 @@ struct CPU
 {
     CPU* self;
     uint32_t id, lapicId;
-    bool started;
-    uint64_t kernelStack;
+    bool started, online, schedulerReady, timerReady;
+    uint64_t kernelStackTop;
     Task::Task *currentTask, *idleTask;
     Scheduler::Scheduler* scheduler;
     uint64_t ticks, preemptedTasks;
@@ -20,7 +20,9 @@ extern CPU cpus[SMP::MAX_CPUS];
 
 namespace CPUManager
 {
-    void initCPU(uint32_t cpuId, uint32_t lapicId);
+    bool initCPU(uint32_t cpuId, uint32_t lapicId);
+    bool initRuntime(uint32_t cpuId);
+
     CPU* getCurrentCPU();
     uint32_t getCurrentCPUId();
 }

@@ -19,8 +19,8 @@ extern "C" void taskExit()
 
     Interrupt::disableInterrupts();
     current->state = Task::TaskState::DEAD;
-    current->next = scheduler->head;
-    scheduler->head = current;
+    current->next = scheduler->deadHead;
+    scheduler->deadHead = current;
 
     Task::taskYield();
     while (true) asm volatile ("hlt");
@@ -59,11 +59,15 @@ Task::Task* Task::taskCreate(void (*entry)(void*), void* arg, int priority)
     t->id = nextTaskId.increment();
     t->state = TaskState::READY;
     t->priority = priority;
-    t->timeSlice = 10;
+    t->timeSlice = DEFAULT_TIME_SLICE;
     t->entry = entry;
     t->arg = arg;
     t->stackSize = 16384;
     t->kernelStack = reinterpret_cast<uint64_t>(SlabAllocator::alloc(t->stackSize, 16));
+    t->ownedCpuId = CPUManager::getCurrentCPUId();
+    t->queued = false;
+    t->next = nullptr;
+    t->prev = nullptr;
 
     if (!t->kernelStack)
     {

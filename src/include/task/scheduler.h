@@ -1,6 +1,7 @@
 #pragma once
 
 #include <core/utils.h>
+#include <memory/spinlock.h>
 #include <task/task.h>
 
 namespace Scheduler
@@ -13,8 +14,9 @@ namespace Scheduler
     struct Scheduler
     {
         RunQueue queues[Task::MAX_PRIORITY + 1];
-        uint32_t bitmap = 0;
-        Task::Task *currentTask = nullptr, *idleTask = nullptr, *head = nullptr;
+        Spinlock lock;
+        uint32_t bitmap = 0, cpuId = 0;
+        Task::Task *currentTask = nullptr, *idleTask = nullptr, *deadHead = nullptr;
     };
 
     void initCPU(Scheduler* scheduler, Task::Task* idleTask);

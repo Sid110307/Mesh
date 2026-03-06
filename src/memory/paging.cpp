@@ -7,7 +7,8 @@ extern limine_framebuffer_request framebuffer_request;
 extern limine_memmap_request memmap_request;
 extern limine_hhdm_request hhdm_request;
 extern limine_executable_address_request executable_addr_request;
-extern uint8_t _kernel_start[], _kernel_end[];
+extern uint8_t _text_start[], _text_end[], _rodata_start[], _rodata_end[], __data_start[], __data_end[], __bss_start[],
+               __bss_end[];
 
 Spinlock pagingLock, frameAllocatorLock;
 uint64_t memoryBase = 0, memorySize = 0, totalFrames = 0, usedFrames = 0, next = 0, *bitmap = nullptr, *pml4 = nullptr;
@@ -30,7 +31,7 @@ uint64_t* ensureTable(uint64_t* parent, const uint16_t index, const PageFlags fl
 {
     if (parent[index] & static_cast<uint64_t>(PageFlags::HUGE))
     {
-        Serial::printf("Paging: Cannot ensure table at index %u because parent entry is a huge page.\n", index);
+        Serial::printf("Paging: Cannot ensure table at index %u because parent entry is a huge page\n", index);
         return nullptr;
     }
     const uint64_t want = static_cast<uint64_t>(PageFlags::PRESENT) | (static_cast<uint64_t>(flags) &
@@ -206,29 +207,43 @@ bool Paging::init()
     pml4 = createPageTable();
     if (!pml4)
     {
-        Serial::printf("Paging: Failed to create PML4 table.\n");
+        Serial::printf("Paging: Failed to create PML4 table\n");
         return false;
     }
 
-    uint64_t kernelPhysStart = executable_addr_request.response->physical_base,
-             kernelVirtStart = executable_addr_request.response->virtual_base;
-    if (!map(kernelVirtStart, kernelPhysStart, _kernel_end - _kernel_start,
-             PageFlags::PRESENT | PageFlags::RW | PageFlags::GLOBAL))
+    const uint64_t kernelDelta = executable_addr_request.response->virtual_base - executable_addr_request.response->
+        physical_base;
+
+    if (const auto textVirt = reinterpret_cast<uint64_t>(_text_start);
+        !map(textVirt, textVirt - kernelDelta, reinterpret_cast<uint64_t>(_text_end) - textVirt,
+             PageFlags::PRESENT | PageFlags::GLOBAL))
     {
-        Serial::printf("Paging: Failed to map kernel page at 0x%lx to 0x%lx.\n", kernelVirtStart, kernelPhysStart);
+        Serial::printf("Paging: Failed to map text page at 0x%lx to 0x%lx\n", textVirt, textVirt - kernelDelta);
         return false;
     }
 
-    if (framebuffer_request.response && framebuffer_request.response->framebuffer_count > 0)
+    if (const auto rodataVirt = reinterpret_cast<uint64_t>(_rodata_start);
+        !map(rodataVirt, rodataVirt - kernelDelta, reinterpret_cast<uint64_t>(_rodata_end) - rodataVirt,
+             PageFlags::PRESENT | PageFlags::GLOBAL | PageFlags::NO_EXECUTE))
     {
-        auto* fb = framebuffer_request.response->framebuffers[0];
-        if (auto fbBase = reinterpret_cast<uintptr_t>(fb->address);
-            !map(fbBase, fbBase, fb->pitch * fb->height,
-                 PageFlags::PRESENT | PageFlags::RW | PageFlags::GLOBAL | PageFlags::NO_EXECUTE))
-        {
-            Serial::printf("Paging: Failed to map framebuffer page at 0x%lx.\n", fbBase);
-            return false;
-        }
+        Serial::printf("Paging: Failed to map rodata page at 0x%lx to 0x%lx\n", rodataVirt, rodataVirt - kernelDelta);
+        return false;
+    }
+
+    if (const auto dataVirt = reinterpret_cast<uint64_t>(__data_start);
+        !map(dataVirt, dataVirt - kernelDelta, reinterpret_cast<uint64_t>(__data_end) - dataVirt,
+             PageFlags::PRESENT | PageFlags::RW | PageFlags::GLOBAL | PageFlags::NO_EXECUTE))
+    {
+        Serial::printf("Paging: Failed to map data page at 0x%lx to 0x%lx\n", dataVirt, dataVirt - kernelDelta);
+        return false;
+    }
+
+    if (const auto bssVirt = reinterpret_cast<uint64_t>(__bss_start);
+        !map(bssVirt, bssVirt - kernelDelta, reinterpret_cast<uint64_t>(__bss_end) - bssVirt,
+             PageFlags::PRESENT | PageFlags::RW | PageFlags::GLOBAL | PageFlags::NO_EXECUTE))
+    {
+        Serial::printf("Paging: Failed to map bss page at 0x%lx to 0x%lx\n", bssVirt, bssVirt - kernelDelta);
+        return false;
     }
 
     for (size_t i = 0; i < memmap_request.response->entry_count; ++i)
@@ -238,7 +253,7 @@ bool Paging::init()
 
         if (!map(e->base + hhdm_request.response->offset, e->base, e->length,
                  PageFlags::PRESENT | PageFlags::RW | PageFlags::GLOBAL | PageFlags::NO_EXECUTE))
-            Panic::panic("Failed to map physical memory page at 0x%lx.\n", e->base + hhdm_request.response->offset);
+            Panic::panic("Failed to map physical memory page at 0x%lx\n", e->base + hhdm_request.response->offset);
     }
 
     asm volatile ("mov %0, %%cr3" :: "r"(reinterpret_cast<uint64_t>(pml4) - hhdm_request.response->offset) : "memory");

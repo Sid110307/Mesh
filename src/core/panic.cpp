@@ -1,6 +1,5 @@
 #include <arch/x86_64/cpu.h>
 #include <arch/x86_64/isr.h>
-#include <arch/x86_64/smp.h>
 #include <core/panic.h>
 #include <drivers/renderer.h>
 
@@ -12,18 +11,11 @@ uint64_t readRbp()
     return rbp;
 }
 
-void printHeader()
-{
-    Renderer::setSerialPrint(true);
-    Renderer::printf("\n\x1b[31m==================== KERNEL PANIC ====================\x1b[0m\n");
-    Renderer::printf("\x1b[90mCPU ID:\x1b[0m %u | \x1b[90mLAPIC ID:\x1b[0m %u\n", CPUManager::getCurrentCPUId(),
-                     SMP::getLapicId());
-}
-
 void Panic::panic(const char* fmt, ...)
 {
     Interrupt::disableInterrupts();
-    printHeader();
+    Renderer::setSerialPrint(true);
+    Renderer::printf("\n\x1b[31m==================== KERNEL PANIC ====================\x1b[0m\n");
 
     va_list args;
     va_start(args, fmt);
@@ -42,7 +34,8 @@ void Panic::panic(const char* fmt, ...)
 void Panic::panicFrame(const Interrupt::Frame* frame, const char* fmt, ...)
 {
     Interrupt::disableInterrupts();
-    printHeader();
+    Renderer::setSerialPrint(true);
+    Renderer::printf("\n\x1b[31m==================== KERNEL PANIC ====================\x1b[0m\n");
 
     if (frame)
     {

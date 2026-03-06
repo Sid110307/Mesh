@@ -122,7 +122,7 @@ bool BuddyAllocator::init()
 
     if (buddyBase == 0 || buddySize < FrameAllocator::SMALL_SIZE)
     {
-        Serial::printf("BuddyAllocator: No memory available for buddy allocator.\n");
+        Serial::printf("BuddyAllocator: No memory available for buddy allocator\n");
         return false;
     }
 
@@ -130,7 +130,7 @@ bool BuddyAllocator::init()
                    alignedEnd = Alignment::alignDown(buddyBase + buddySize, FrameAllocator::SMALL_SIZE);
     if (alignedEnd <= alignedBase)
     {
-        Serial::printf("BuddyAllocator: Region too small after alignment.\n");
+        Serial::printf("BuddyAllocator: Region too small after alignment\n");
         return false;
     }
 
@@ -151,7 +151,7 @@ bool BuddyAllocator::init()
                        FrameAllocator::SMALL_SIZE;
     if (metaPages >= totalPages)
     {
-        Serial::printf("BuddyAllocator: Not enough space for metadata.\n");
+        Serial::printf("BuddyAllocator: Not enough space for metadata\n");
         return false;
     }
 
@@ -161,14 +161,14 @@ bool BuddyAllocator::init()
         void* f = FrameAllocator::alloc();
         if (!f)
         {
-            Serial::printf("BuddyAllocator: Failed to allocate frame for metadata.\n");
+            Serial::printf("BuddyAllocator: Failed to allocate frame for metadata\n");
             return false;
         }
 
         if (i == 0) metaPhys = reinterpret_cast<uint64_t>(f);
         else if (reinterpret_cast<uint64_t>(f) != metaPhys + i * FrameAllocator::SMALL_SIZE)
         {
-            Serial::printf("BuddyAllocator: Metadata frames are not contiguous.\n");
+            Serial::printf("BuddyAllocator: Metadata frames are not contiguous\n");
             return false;
         }
     }
@@ -287,5 +287,5 @@ void BuddyAllocator::free(const uint64_t address, const int order)
     head->reserved = false;
 
     listAdd(currentOrder, head);
-    freePages += 1ULL << currentOrder;
+    freePages += 1ULL << order;
 }

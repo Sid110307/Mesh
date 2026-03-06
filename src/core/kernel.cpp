@@ -23,8 +23,7 @@ extern limine_date_at_boot_request date_at_boot_request;
 extern "C" void isrTimer();
 extern "C" void isrYield();
 
-Scheduler::Scheduler schedulers[SMP::MAX_CPUS];
-void idleTask(void*) { while (true) asm volatile ("hlt"); }
+extern Scheduler::Scheduler schedulers[SMP::MAX_CPUS];
 
 void initSIMD()
 {
@@ -84,10 +83,14 @@ void dumpStats()
         Renderer::printf("\x1b[36m[SMP] \x1b[96m%u CPUs Detected\x1b[0m\n", mp_request.response->cpu_count);
 
     const auto cpuFeatures = SMP::getCPUFeatures();
-    Renderer::printf("\x1b[36m[CPU Features] \x1b[32m%s%s%s%s%s%s\x1b[0m\n", cpuFeatures.hasSSE ? "SSE " : "",
-                     cpuFeatures.hasSSE2 ? "SSE2 " : "", cpuFeatures.hasSSE3 ? "SSE3 " : "",
-                     cpuFeatures.hasSSE4_1 ? "SSE4.1 " : "", cpuFeatures.hasSSE4_2 ? "SSE4.2 " : "",
-                     cpuFeatures.hasAVX ? "AVX " : "");
+    Renderer::printf("\x1b[36m[CPU Features] \x1b[32m%s%s%s%s%s%s%s%s%s%s%s%s\x1b[0m\n",
+                     cpuFeatures.hasSSE ? "SSE " : "", cpuFeatures.hasSSE2 ? "SSE2 " : "",
+                     cpuFeatures.hasSSE3 ? "SSE3 " : "", cpuFeatures.hasSSE4_1 ? "SSE4.1 " : "",
+                     cpuFeatures.hasSSE4_2 ? "SSE4.2 " : "", cpuFeatures.hasXSAVE ? "XSAVE " : "",
+                     cpuFeatures.hasOSXSAVE ? "OSXSAVE " : "", cpuFeatures.hasAVX ? "AVX " : "",
+                     cpuFeatures.hasAVXUsable ? "AVXUsable " : "", cpuFeatures.hasNX ? "NX " : "",
+                     cpuFeatures.hasX2APIC ? "X2APIC " : "", cpuFeatures.hasTSCDeadline ? "TSCDeadline " : "",
+                     cpuFeatures.hasPAT ? "PAT" : "");
 }
 
 void initGDT()
@@ -155,6 +158,17 @@ void initIOAPIC()
     Renderer::printf("\x1b[32mDone!\x1b[0m\n");
 }
 
+void initLapicTimer()
+{
+    Renderer::printf("\x1b[36mInitializing LAPIC Timer... ");
+    LAPIC::timerInit(0x22);
+    LAPIC::timerSetDivide(16);
+    LAPIC::timerCalibrate(10);
+    LAPIC::timerPeriodic();
+    CPUManager::getCurrentCPU()->timerReady = true;
+    Renderer::printf("\x1b[32mDone!\x1b[0m\n");
+}
+
 extern "C" [[noreturn]] void kernelMain()
 {
     initRenderer();
@@ -167,27 +181,18 @@ extern "C" [[noreturn]] void kernelMain()
     initIDT();
     SMP::init();
     LAPIC::init(SMP::getLapicBase());
-    CPUManager::initCPU(0, mp_request.response->bsp_lapic_id);
 
-    CPU* cpu = CPUManager::getCurrentCPU();
-    cpu->scheduler = &schedulers[0];
-
-    Task::Task* idle = Task::taskCreate(idleTask, nullptr, 0);
-    cpu->idleTask = idle;
-    cpu->currentTask = idle;
-    Scheduler::initCPU(cpu->scheduler, idle);
+    if (!CPUManager::initCPU(0, mp_request.response->bsp_lapic_id)) Panic::panic("Failed to initialize primary CPU.");
+    if (!CPUManager::initRuntime(0)) Panic::panic("Failed to initialize primary CPU runtime.");
 
     initIOAPIC();
     Keyboard::init();
-
-    LAPIC::timerInit(0x22);
-    LAPIC::timerSetDivide(16);
-    LAPIC::timerCalibrate(10);
-    LAPIC::timerPeriodic();
+    initLapicTimer();
 
     Interrupt::enableInterrupts();
     while (true)
     {
+        Keyboard::service();
         while (char c = Keyboard::readChar()) Renderer::printf("%c", c);
 
         static uint64_t last = 0;

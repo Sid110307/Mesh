@@ -156,7 +156,7 @@ bool ACPI::init(MADTInfo& madtInfo)
     }
     else
     {
-        Serial::printf("ACPI: No valid RSDT/XSDT address in RSDP (revision %u, RSDT 0x%X, XSDT 0x%lX)\n",
+        Serial::printf("ACPI: No valid RSDT/XSDT address in RSDP (revision %u, RSDT 0x%x, XSDT 0x%lx)\n",
                        rsdp->revision, rsdp->rsdtAddress, rsdp->xsdtAddress);
         return false;
     }
@@ -165,8 +165,16 @@ bool ACPI::init(MADTInfo& madtInfo)
     else
     {
         if (const auto* fadt = reinterpret_cast<FADT*>(facpHeader); fadt->xPmTimerBlock.address)
-            LAPIC::timerSetPort(fadt->xPmTimerBlock.address);
-        else if (fadt->pmTimerBlockAddr) LAPIC::timerSetPort(fadt->pmTimerBlockAddr);
+        {
+            if (fadt->xPmTimerBlock.addressSpace == 1 && fadt->xPmTimerBlock.address <= 0xFFFFFFFFu)
+                LAPIC::timerSetPort(static_cast<uint32_t>(fadt->xPmTimerBlock.address),
+                                    fadt->xPmTimerBlock.bitWidth == 32);
+            else
+                Serial::printf("ACPI: Invalid PM timer GAS in FADT (address space %u, address 0x%lx, bit width %u)\n",
+                               fadt->xPmTimerBlock.addressSpace, fadt->xPmTimerBlock.address,
+                               fadt->xPmTimerBlock.bitWidth);
+        }
+        else if (fadt->pmTimerBlockAddr) LAPIC::timerSetPort(fadt->pmTimerBlockAddr, fadt->pmTimerLength == 4);
         else Serial::printf("ACPI: No PM timer block address found in FADT\n");
     }
 

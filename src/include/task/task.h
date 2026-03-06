@@ -13,7 +13,7 @@ namespace Task
         DEAD
     };
 
-    constexpr int MAX_PRIORITY = 31;
+    constexpr int MAX_PRIORITY = 31, DEFAULT_TIME_SLICE = 10;
 
     struct Task
     {
@@ -22,6 +22,8 @@ namespace Task
         int priority, timeSlice;
         uint64_t context, kernelStack, stackSize;
         Task *next, *prev;
+        bool queued;
+        uint32_t ownedCpuId;
 
         void (*entry)(void*);
         void* arg;

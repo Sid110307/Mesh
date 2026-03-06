@@ -2,6 +2,7 @@
 #include <arch/x86_64/gdt.h>
 #include <arch/x86_64/idt.h>
 #include <arch/x86_64/isr.h>
+#include <arch/x86_64/lapic.h>
 #include <arch/x86_64/smp.h>
 #include <core/limine.h>
 #include <drivers/renderer.h>
@@ -36,7 +37,19 @@ extern "C" void apMain(uint32_t cpuId)
     GDTManager::load();
     IDTManager::load();
     GDTManager::loadTR(cpuId);
-    CPUManager::initCPU(cpuId, SMP::getLapicId());
+
+    if (uint32_t lapicId = SMP::getLapicId(); !CPUManager::initCPU(cpuId, lapicId))
+    {
+        Renderer::printf("\x1b[31m[AP] Failed to initialize CPU %u (LAPIC ID %u)!\x1b[0m\n", cpuId, lapicId);
+        while (true) asm volatile ("hlt");
+    }
+
+    LAPIC::init(SMP::getLapicBase());
+    if (!CPUManager::initRuntime(cpuId))
+    {
+        Renderer::printf("\x1b[31m[AP] Failed to initialize CPU %u runtime!\x1b[0m\n", cpuId);
+        while (true) asm volatile ("hlt");
+    }
 
     apReadyCount.increment();
     Interrupt::enableInterrupts();
@@ -117,14 +130,37 @@ void SMP::init()
 void SMP::detectCPUFeatures()
 {
     uint32_t eax, ebx, ecx, edx;
-    asm volatile ("cpuid" : "=a"(eax), "=b"(ebx), "=c"(ecx), "=d"(edx) : "a"(1));
+    asm volatile ("cpuid" : "=a"(eax), "=b"(ebx), "=c"(ecx), "=d"(edx) : "a"(1), "c"(0));
 
-    cpuFeatures.hasSSE = edx & (1 << 25);
-    cpuFeatures.hasSSE2 = edx & (1 << 26);
-    cpuFeatures.hasSSE3 = ecx & (1 << 0);
-    cpuFeatures.hasSSE4_1 = ecx & (1 << 19);
-    cpuFeatures.hasSSE4_2 = ecx & (1 << 20);
-    cpuFeatures.hasAVX = ecx & (1 << 27);
+    cpuFeatures.hasSSE = edx & (1u << 25);
+    cpuFeatures.hasSSE2 = edx & (1u << 26);
+    cpuFeatures.hasSSE3 = ecx & (1u << 0);
+    cpuFeatures.hasSSE4_1 = ecx & (1u << 19);
+    cpuFeatures.hasSSE4_2 = ecx & (1u << 20);
+    cpuFeatures.hasXSAVE = ecx & (1u << 26);
+    cpuFeatures.hasOSXSAVE = ecx & (1u << 27);
+    cpuFeatures.hasAVX = ecx & (1u << 28);
+    cpuFeatures.hasX2APIC = ecx & (1u << 21);
+    cpuFeatures.hasTSCDeadline = ecx & (1u << 24);
+    cpuFeatures.hasPAT = edx & (1u << 16);
+    cpuFeatures.hasAVXUsable = false;
+
+    if (cpuFeatures.hasOSXSAVE)
+    {
+        uint32_t low, high;
+        asm volatile ("xgetbv" : "=a"(low), "=d"(high) : "c"(0));
+        cpuFeatures.hasAVXUsable = cpuFeatures.hasAVX && (((static_cast<uint64_t>(high) << 32) | low) & 0x6) == 0x6;
+    }
+
+    uint32_t maxExtended;
+    asm volatile ("cpuid" : "=a"(maxExtended), "=b"(ebx), "=c"(ecx), "=d"(edx) : "a"(0x80000000), "c"(0));
+    cpuFeatures.hasNX = false;
+
+    if (maxExtended >= 0x80000001)
+    {
+        asm volatile ("cpuid" : "=a"(eax), "=b"(ebx), "=c"(ecx), "=d"(edx) : "a"(0x80000001), "c"(0));
+        cpuFeatures.hasNX = edx & (1u << 20);
+    }
 }
 
 uint32_t SMP::getCpuCount() { return cpuCount; }

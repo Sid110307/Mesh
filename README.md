@@ -55,7 +55,6 @@
 - [ ] SMP task scheduling and load balancing
 - [ ] Power management (ACPI S3 sleep, etc.)
 - [ ] RTC/CMOS clock support
-- [ ] Other architectures (ARM, RISC-V, etc.)
 
 ## Requirements
 

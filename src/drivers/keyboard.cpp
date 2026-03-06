@@ -48,7 +48,7 @@ constexpr Pair pairs[] = {
     {Keyboard::Key::SLASH, '/', '?'},
 };
 
-bool keyboardInitialized = false;
+bool keyboardInitialized = false, ledsDirty = false;
 Spinlock lock;
 Queue eventQueue = {};
 Keyboard::Modifiers currentModifiers = {false, false, false, false, false, false, false};
@@ -410,17 +410,17 @@ void applyModifiers(const Keyboard::Event& event)
     if (event.pressed && event.key == Keyboard::Key::CAPSLOCK)
     {
         currentModifiers.capsLock = !currentModifiers.capsLock;
-        setLeds(currentModifiers.capsLock, currentModifiers.numLock, currentModifiers.scrollLock);
+        ledsDirty = true;
     }
     if (event.pressed && event.key == Keyboard::Key::NUMLOCK)
     {
         currentModifiers.numLock = !currentModifiers.numLock;
-        setLeds(currentModifiers.capsLock, currentModifiers.numLock, currentModifiers.scrollLock);
+        ledsDirty = true;
     }
     if (event.pressed && event.key == Keyboard::Key::SCROLLLOCK)
     {
         currentModifiers.scrollLock = !currentModifiers.scrollLock;
-        setLeds(currentModifiers.capsLock, currentModifiers.numLock, currentModifiers.scrollLock);
+        ledsDirty = true;
     }
 }
 
@@ -487,6 +487,15 @@ void Keyboard::init()
 }
 
 void Keyboard::irq() { while (consumeByte()); }
+
+void Keyboard::service()
+{
+    LockGuard guard(lock);
+    if (!keyboardInitialized || !ledsDirty) return;
+
+    ledsDirty = false;
+    setLeds(currentModifiers.capsLock, currentModifiers.numLock, currentModifiers.scrollLock);
+}
 
 bool Keyboard::readEvent(Event& event)
 {

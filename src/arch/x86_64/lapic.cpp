@@ -11,10 +11,11 @@ volatile uint32_t *lapicRegisters = nullptr, *ioapicRegisters = nullptr;
 uint32_t globalIrqBase = 0;
 
 Atomic apicTicks{0};
-uint16_t apicTimerPort = 0;
-uint32_t apicTimerFrequency = 0, apicTimerTick = 0;
+bool isApicTimer32Bit = false;
+uint32_t apicTimerPort = 0;
+uint64_t apicTimerFrequency = 0, apicTimerTick = 0;
 
-uint32_t getDivide(const uint8_t divide)
+uint64_t getDivide(const uint8_t divide)
 {
     switch (divide)
     {
@@ -30,12 +31,21 @@ uint32_t getDivide(const uint8_t divide)
     }
 }
 
-uint32_t timerRead() { return apicTimerPort == 0 ? 0 : inl(apicTimerPort) & 0x00FFFFFFu; }
-
-void timerWaitTicks(const uint32_t ticks)
+uint64_t timerRead()
 {
-    const uint32_t start = timerRead();
-    while (((timerRead() - start) & 0x00FFFFFFu) < ticks) asm volatile ("pause");
+    if (apicTimerPort == 0) return 0;
+
+    const uint32_t value = inl(apicTimerPort);
+    return isApicTimer32Bit ? value : (value & 0x00FFFFFFu);
+}
+
+void timerWaitTicks(const uint64_t ticks)
+{
+    if (apicTimerPort == 0 || ticks == 0) return;
+    const uint64_t start = timerRead();
+
+    if (isApicTimer32Bit) while (timerRead() - start < ticks) asm volatile ("pause");
+    else while (((timerRead() - start) & 0x00FFFFFFu) < ticks) asm volatile ("pause");
 }
 
 void LAPIC::init(const uint64_t virtBase)
@@ -93,15 +103,20 @@ void LAPIC::timerCalibrate(const uint32_t sampleMs)
 }
 
 void LAPIC::timerIrq() { apicTicks.increment(); }
-void LAPIC::timerSetPort(const uint16_t port) { apicTimerPort = port; }
 uint64_t LAPIC::timerGetTicks() { return apicTicks.load(); }
 
-void LAPIC::sleepMs(uint32_t ms)
+void LAPIC::timerSetPort(const uint32_t port, const bool is32Bit)
+{
+    apicTimerPort = port;
+    isApicTimer32Bit = is32Bit;
+}
+
+void LAPIC::sleepMs(uint64_t ms)
 {
     if (ms == 0 || apicTimerFrequency == 0) return;
     if (!Interrupt::interruptsEnabled())
     {
-        Serial::printf("LAPIC: Cannot sleep with interrupts disabled.\n");
+        Serial::printf("LAPIC: Cannot sleep with interrupts disabled\n");
         return;
     }
 

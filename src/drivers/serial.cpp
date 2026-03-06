@@ -18,7 +18,7 @@ void printUnlocked(const char* str)
     if (!serialInitialized) Serial::init();
     if (!str)
     {
-        printUnlocked("Serial: Invalid string.\n");
+        printUnlocked("Serial: Invalid string\n");
         return;
     }
 
@@ -59,7 +59,7 @@ void Serial::printf(const char* fmt, ...)
     if (!serialInitialized) init();
     if (!fmt || !*fmt)
     {
-        printUnlocked("Serial: Invalid format string.\n");
+        printUnlocked("Serial: Invalid format string\n");
         return;
     }
 

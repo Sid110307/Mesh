@@ -16,9 +16,9 @@ namespace LAPIC
     void timerCalibrate(uint32_t sampleMs);
 
     void timerIrq();
-    void timerSetPort(uint16_t port);
     uint64_t timerGetTicks();
-    void sleepMs(uint32_t ms);
+    void timerSetPort(uint32_t port, bool is32Bit);
+    void sleepMs(uint64_t ms);
 }
 
 namespace IOAPIC
