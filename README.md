@@ -1,6 +1,6 @@
 # Mesh
 
-> A lightweight OS kernel with SMP, paging, and basic IO, written in C++ and x86 Assembly.
+> An x86 OS kernel with SMP, paging, and IO, written in C++ and x86 Assembly.
 
 ### Features
 
@@ -31,10 +31,10 @@
 - [x] Kernel threads
 - [x] Scheduler
 - [x] Context switching
+- [x] Virtual memory management
 
 #### Planned
 
-- [ ] Virtual memory management
 - [ ] Process management and address spaces
 - [ ] Memory protection and COW
 

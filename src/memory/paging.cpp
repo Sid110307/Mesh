@@ -63,6 +63,11 @@ void freeTable(uint64_t* parent, const uint16_t index)
     parent[index] = 0;
 }
 
+bool Alignment::overlaps(const uint64_t address1, const uint64_t size1, const uint64_t address2, const uint64_t size2)
+{
+    return address1 < address2 + size2 && address2 < address1 + size1;
+}
+
 bool Alignment::aligned(const uint64_t address, const uint64_t size) { return (address & (size - 1)) == 0; }
 uint64_t Alignment::alignDown(const uint64_t address, const uint64_t size) { return address & ~(size - 1); }
 uint64_t Alignment::alignUp(const uint64_t address, const uint64_t size) { return (address + size - 1) & ~(size - 1); }

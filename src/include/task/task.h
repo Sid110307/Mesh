@@ -20,7 +20,7 @@ namespace Task
         uint64_t id;
         TaskState state;
         int priority, timeSlice;
-        uint64_t context, kernelStack, stackSize;
+        uint64_t context, kernelStackBase, kernelStackTop, kernelStackSize;
         Task *next, *prev;
         bool queued;
         uint32_t ownedCpuId;

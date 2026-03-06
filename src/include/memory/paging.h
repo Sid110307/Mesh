@@ -32,6 +32,7 @@ constexpr PageFlags operator~(PageFlags flag) { return static_cast<PageFlags>(~s
 
 namespace Alignment
 {
+    bool overlaps(uint64_t address1, uint64_t size1, uint64_t address2, uint64_t size2);
     bool aligned(uint64_t address, uint64_t size);
     uint64_t alignDown(uint64_t address, uint64_t size);
     uint64_t alignUp(uint64_t address, uint64_t size);

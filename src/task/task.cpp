@@ -2,6 +2,7 @@
 #include <arch/x86_64/isr.h>
 #include <memory/atomic.h>
 #include <memory/slab.h>
+#include <memory/vmm.h>
 #include <task/scheduler.h>
 #include <task/task.h>
 
@@ -62,20 +63,33 @@ Task::Task* Task::taskCreate(void (*entry)(void*), void* arg, int priority)
     t->timeSlice = DEFAULT_TIME_SLICE;
     t->entry = entry;
     t->arg = arg;
-    t->stackSize = 16384;
-    t->kernelStack = reinterpret_cast<uint64_t>(SlabAllocator::alloc(t->stackSize, 16));
     t->ownedCpuId = CPUManager::getCurrentCPUId();
     t->queued = false;
     t->next = nullptr;
     t->prev = nullptr;
+    t->kernelStackSize = 16384;
 
-    if (!t->kernelStack)
+    void* stackRegion = VMM::reserve(t->kernelStackSize + FrameAllocator::SMALL_SIZE, VMM::RegionType::STACK,
+                                     PageFlags::RW | PageFlags::GLOBAL | PageFlags::NO_EXECUTE);
+    if (!stackRegion)
     {
         SlabAllocator::free(t);
         return nullptr;
     }
 
-    const uint64_t sp = ((t->kernelStack + t->stackSize) & ~0xFULL) - sizeof(Interrupt::TimerFrame);
+    const uint64_t usableBase = reinterpret_cast<uint64_t>(stackRegion) + FrameAllocator::SMALL_SIZE;
+    if (!VMM::commit(reinterpret_cast<void*>(usableBase)))
+    {
+        VMM::unmap(stackRegion);
+        SlabAllocator::free(t);
+
+        return nullptr;
+    }
+
+    t->kernelStackBase = reinterpret_cast<uint64_t>(stackRegion);
+    t->kernelStackTop = usableBase + t->kernelStackSize;
+
+    const uint64_t sp = (t->kernelStackTop & ~0xFULL) - sizeof(Interrupt::TimerFrame);
     auto* frame = reinterpret_cast<Interrupt::TimerFrame*>(sp);
     memset(frame, 0, sizeof(*frame));
 
@@ -91,7 +105,7 @@ Task::Task* Task::taskCreate(void (*entry)(void*), void* arg, int priority)
 void Task::taskDestroy(Task* task)
 {
     if (!task) return;
-    if (task->kernelStack) SlabAllocator::free(reinterpret_cast<void*>(task->kernelStack));
+    if (task->kernelStackBase) VMM::unmap(reinterpret_cast<void*>(task->kernelStackBase));
 
     SlabAllocator::free(task);
 }

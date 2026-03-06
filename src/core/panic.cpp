@@ -72,7 +72,7 @@ void Panic::printStackTrace(uint64_t basePointer, const int maxFrames)
 
     for (int i = 0; i < maxFrames; ++i)
     {
-        if (rbp == 0 || (rbp & 0x7) != 0)
+        if (rbp == 0 || (rbp & 0x7) )
         {
             Renderer::printf("\x1b[90m[End of stack trace]\x1b[0m\n");
             break;
