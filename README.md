@@ -31,10 +31,10 @@
 - [x] Kernel threads
 - [x] Scheduler
 - [x] Context switching
+- [ ] Virtual memory management
 
 #### Planned
 
-- [ ] Virtual memory management
 - [ ] Process management and address spaces
 - [ ] Memory protection and COW
 
