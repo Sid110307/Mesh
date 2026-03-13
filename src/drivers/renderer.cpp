@@ -8,6 +8,13 @@ struct __attribute__ ((packed)) PSF1Header
     uint8_t magic[2], mode, charSize;
 };
 
+struct AnsiState
+{
+    bool inEscape = false;
+    char buffer[32] = {};
+    int length = 0;
+};
+
 extern limine_framebuffer_request framebuffer_request;
 extern uint8_t asset_src_assets_fonts_zap_ext_light18_psf_start[];
 
@@ -43,6 +50,62 @@ void drawGlyph(const uint32_t px, const uint32_t py, const char c, const uint32_
     for (uint32_t y = 0; y < font.height && py + y < fbHeight; ++y)
         for (uint32_t x = 0; x < font.width && px + x < fbWidth; ++x)
             fbAddress[(py + y) * (fbPitch / sizeof(uint32_t)) + (px + x)] = glyph[y] & (1 << (7 - x)) ? fg : bg;
+}
+
+bool processAnsi(AnsiState& s, char c,
+                 uint32_t& fg, uint32_t& bg)
+{
+    if (!s.inEscape)
+    {
+        if (c == '\x1b')
+        {
+            s.inEscape = true;
+            s.length = 0;
+
+            return true;
+        }
+        return false;
+    }
+
+    if (s.length == 0 && c != '[')
+    {
+        s.inEscape = false;
+        return false;
+    }
+
+    s.buffer[s.length++] = c;
+    s.buffer[s.length] = '\0';
+    if (c != 'm') return true;
+    s.inEscape = false;
+
+    static const uint32_t basic[] = {0x000000, 0xAA0000, 0x00AA00, 0xAA5500, 0x0000AA, 0xAA00AA, 0x00AAAA, 0xAAAAAA};
+    static const uint32_t bright[] = {0x555555, 0xFF5555, 0x55FF55, 0xFFFF55, 0x5555FF, 0xFF55FF, 0x55FFFF, 0xFFFFFF};
+
+    const char* p = s.buffer + 1;
+    while (*p)
+    {
+        int code = 0;
+        while (*p >= '0' && *p <= '9') code = code * 10 + (*p++ - '0');
+        if (*p == ';' || *p == 'm') p++;
+
+        if (code == 0)
+        {
+            fg = WHITE;
+            bg = BLACK;
+        }
+        else if (code == 7)
+        {
+            const uint32_t t = fg;
+
+            fg = bg;
+            bg = t;
+        }
+        else if (code >= 30 && code <= 37) fg = basic[code - 30];
+        else if (code >= 40 && code <= 47) bg = basic[code - 40];
+        else if (code >= 90 && code <= 97) fg = bright[code - 90];
+        else if (code >= 100 && code <= 107) bg = bright[code - 100];
+    }
+    return true;
 }
 
 void clearUnlocked(const uint32_t color)
@@ -146,45 +209,11 @@ void printUnlocked(const char* str, const uint32_t fg = ansiFg, const uint32_t b
         return;
     }
 
+    AnsiState state;
     uint32_t fgColor = fg, bgColor = bg;
-    bool inEscape = false;
-    char escBuf[16];
-    int escLen = 0;
 
-    for (const char* p = str; *p; ++p)
-    {
-        const char c = *p;
-
-        if (inEscape)
-        {
-            if (c == 'm')
-            {
-                escBuf[escLen] = '\0';
-                if (escLen > 0 && escBuf[0] == '[') Renderer::escapeAnsi(escBuf + 1, fgColor, bgColor, fg, bg);
-                inEscape = false;
-                escLen = 0;
-
-                continue;
-            }
-            if (escLen < static_cast<int>(sizeof(escBuf)) - 1) escBuf[escLen++] = c;
-            else
-            {
-                inEscape = false;
-                escLen = 0;
-            }
-
-            continue;
-        }
-        if (c == '\x1B')
-        {
-            inEscape = true;
-            escLen = 0;
-
-            continue;
-        }
-
-        printCharUnlocked(c, fgColor, bgColor);
-    }
+    for (size_t i = 0; str[i]; ++i)
+        if (!processAnsi(state, str[i], fgColor, bgColor)) printCharUnlocked(str[i], fgColor, bgColor);
 }
 
 void printHexUnlocked(const uint64_t value, const uint32_t fg = ansiFg, const uint32_t bg = ansiBg)
@@ -211,45 +240,6 @@ void setCursorUnlocked(const uint32_t x, const uint32_t y)
     cursorY = y >= fbHeight / font.height ? fbHeight / font.height - 1 : y;
 }
 
-void ansiPutChar(const char c)
-{
-    static bool inEscape = false;
-    static char escBuf[16];
-    static size_t escLen = 0;
-
-    if (inEscape)
-    {
-        if (escLen < sizeof(escBuf) - 1) escBuf[escLen++] = c;
-
-        if (c == 'm')
-        {
-            escBuf[escLen] = '\0';
-            if (escBuf[0] == '[') Renderer::escapeAnsi(escBuf + 1, ansiFg, ansiBg, WHITE, BLACK);
-
-            inEscape = false;
-            escLen = 0;
-        }
-        else if (escLen >= sizeof(escBuf) - 1)
-        {
-            Serial::printf("Renderer: ANSI escape sequence too long: %s\n", escBuf);
-
-            inEscape = false;
-            escLen = 0;
-        }
-
-        return;
-    }
-
-    if (c == '\x1B')
-    {
-        inEscape = true;
-        escLen = 0;
-        return;
-    }
-
-    printCharUnlocked(c, ansiFg, ansiBg);
-}
-
 void Renderer::init()
 {
     if (!framebuffer_request.response || framebuffer_request.response->framebuffer_count < 1)
@@ -261,7 +251,7 @@ void Renderer::init()
     const auto* fb = framebuffer_request.response->framebuffers[0];
     if (fb->memory_model != LIMINE_FRAMEBUFFER_RGB || fb->bpp != 32)
     {
-        Serial::printf("Renderer: Unsupported framebuffer format (memory model: %u, bpp: %u).\n", fb->memory_model,
+        Serial::printf("Renderer: Unsupported framebuffer format (memory model: %u, bpp: %u)\n", fb->memory_model,
                        fb->bpp);
         fbAddress = nullptr;
 
@@ -441,9 +431,11 @@ void Renderer::printf(const char* fmt, ...)
         return;
     }
 
+    AnsiState state;
     va_list args;
     va_start(args, fmt);
-    vformat(fmt, args, [](const char c) { ansiPutChar(c); }, [](const char* s) { printUnlocked(s); },
+    vformat(fmt, args, [&state](const char c) { if (!processAnsi(state, c, ansiFg, ansiBg)) printCharUnlocked(c); },
+            [](const char* s) { printUnlocked(s); },
             [](const uint64_t h) { printHexUnlocked(h); }, [](const uint64_t d) { printDecUnlocked(d); });
     va_end(args);
 }

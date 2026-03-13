@@ -3,14 +3,10 @@
 #include <drivers/serial.h>
 #include <memory/atomic.h>
 
-constexpr uint32_t REG_SVR = 0xF0, REG_EOI = 0xB0, REG_LVT_TIMER = 0x320,
-                   REG_TIMER_INITIAL_COUNT = 0x380, REG_TIMER_CURRENT_COUNT = 0x390,
-                   REG_TIMER_DIVIDE_CONFIG = 0x3E0;
-
 volatile uint32_t *lapicRegisters = nullptr, *ioapicRegisters = nullptr;
 uint32_t globalIrqBase = 0;
 
-Atomic apicTicks{0};
+Atomic<uint64_t> apicTicks{0};
 bool isApicTimer32Bit = false;
 uint32_t apicTimerPort = 0;
 uint64_t apicTimerFrequency = 0, apicTimerTick = 0;
@@ -31,21 +27,13 @@ uint64_t getDivide(const uint8_t divide)
     }
 }
 
-uint64_t timerRead()
-{
-    if (apicTimerPort == 0) return 0;
-
-    const uint32_t value = inl(apicTimerPort);
-    return isApicTimer32Bit ? value : (value & 0x00FFFFFFu);
-}
-
 void timerWaitTicks(const uint64_t ticks)
 {
     if (apicTimerPort == 0 || ticks == 0) return;
-    const uint64_t start = timerRead();
+    const uint64_t start = LAPIC::timerRead();
 
-    if (isApicTimer32Bit) while (timerRead() - start < ticks) asm volatile ("pause");
-    else while (((timerRead() - start) & 0x00FFFFFFu) < ticks) asm volatile ("pause");
+    if (isApicTimer32Bit) while (LAPIC::timerRead() - start < ticks) asm volatile ("pause");
+    else while (((LAPIC::timerRead() - start) & 0x00FFFFFFu) < ticks) asm volatile ("pause");
 }
 
 void LAPIC::init(const uint64_t virtBase)
@@ -90,7 +78,7 @@ void LAPIC::timerCalibrate(const uint32_t sampleMs)
     if (apicTimerPort == 0 || sampleMs == 0) return;
 
     write(REG_TIMER_INITIAL_COUNT, 0xFFFFFFFFu);
-    timerWaitTicks(3579545u * sampleMs / 1000u);
+    timerWaitTicks(TIMER_TICKS * sampleMs / 1000u);
 
     apicTimerFrequency = (0xFFFFFFFFu - read(REG_TIMER_CURRENT_COUNT)) * 1000u / sampleMs;
     apicTimerTick = apicTimerFrequency / 1000u;
@@ -104,6 +92,14 @@ void LAPIC::timerCalibrate(const uint32_t sampleMs)
 
 void LAPIC::timerIrq() { apicTicks.increment(); }
 uint64_t LAPIC::timerGetTicks() { return apicTicks.load(); }
+
+uint64_t LAPIC::timerRead()
+{
+    if (apicTimerPort == 0) return 0;
+
+    const uint32_t value = inl(apicTimerPort);
+    return isApicTimer32Bit ? value : (value & 0x00FFFFFFu);
+}
 
 void LAPIC::timerSetPort(const uint32_t port, const bool is32Bit)
 {

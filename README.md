@@ -30,12 +30,12 @@
 - [x] Per-CPU data structures
 - [x] Kernel threads
 - [x] Scheduler
-- [x] Context switching
 - [x] Virtual memory management
 
 #### Planned
 
 - [ ] Process management and address spaces
+- [ ] Context switching
 - [ ] Memory protection and COW
 
 #### Future (userland)

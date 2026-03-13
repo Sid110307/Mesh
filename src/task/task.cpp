@@ -6,7 +6,7 @@
 #include <task/scheduler.h>
 #include <task/task.h>
 
-Atomic nextTaskId{0};
+Atomic<uint32_t> nextTaskId{0};
 
 extern "C" void taskTrampoline(Task::Task* task);
 
@@ -69,27 +69,38 @@ Task::Task* Task::taskCreate(void (*entry)(void*), void* arg, int priority)
     t->prev = nullptr;
     t->kernelStackSize = 16384;
 
-    void* stackRegion = VMM::reserve(t->kernelStackSize + FrameAllocator::SMALL_SIZE, VMM::RegionType::STACK,
+    void* guardPage = VMM::reserve(FrameAllocator::SMALL_SIZE, VMM::RegionType::STACK,
+                                   PageFlags::RW | PageFlags::GLOBAL | PageFlags::NO_EXECUTE);
+    if (!guardPage)
+    {
+        SlabAllocator::free(t);
+        return nullptr;
+    }
+
+    void* stackRegion = VMM::reserve(t->kernelStackSize, VMM::RegionType::STACK,
                                      PageFlags::RW | PageFlags::GLOBAL | PageFlags::NO_EXECUTE);
     if (!stackRegion)
     {
+        VMM::unmap(guardPage);
         SlabAllocator::free(t);
+
         return nullptr;
     }
 
-    const uint64_t usableBase = reinterpret_cast<uint64_t>(stackRegion) + FrameAllocator::SMALL_SIZE;
-    if (!VMM::commit(reinterpret_cast<void*>(usableBase)))
+    if (!VMM::commit(stackRegion))
     {
         VMM::unmap(stackRegion);
+        VMM::unmap(guardPage);
         SlabAllocator::free(t);
 
         return nullptr;
     }
 
-    t->kernelStackBase = reinterpret_cast<uint64_t>(stackRegion);
-    t->kernelStackTop = usableBase + t->kernelStackSize;
+    t->kernelStackBase = reinterpret_cast<uint64_t>(guardPage);
+    t->kernelStackRegion = reinterpret_cast<uint64_t>(stackRegion);
 
-    const uint64_t sp = (t->kernelStackTop & ~0xFULL) - sizeof(Interrupt::TimerFrame);
+    const uint64_t sp = ((reinterpret_cast<uint64_t>(stackRegion) + t->kernelStackSize) & ~0xFULL) -
+        sizeof(Interrupt::TimerFrame);
     auto* frame = reinterpret_cast<Interrupt::TimerFrame*>(sp);
     memset(frame, 0, sizeof(*frame));
 
@@ -97,6 +108,8 @@ Task::Task* Task::taskCreate(void (*entry)(void*), void* arg, int priority)
     frame->rip = reinterpret_cast<uint64_t>(taskStart);
     frame->cs = 0x08;
     frame->rflags = 0x202;
+    frame->rsp = reinterpret_cast<uint64_t>(stackRegion) + t->kernelStackSize;
+    frame->ss = 0x10;
 
     t->context = sp;
     return t;
@@ -105,6 +118,7 @@ Task::Task* Task::taskCreate(void (*entry)(void*), void* arg, int priority)
 void Task::taskDestroy(Task* task)
 {
     if (!task) return;
+    if (task->kernelStackRegion) VMM::unmap(reinterpret_cast<void*>(task->kernelStackRegion));
     if (task->kernelStackBase) VMM::unmap(reinterpret_cast<void*>(task->kernelStackBase));
 
     SlabAllocator::free(task);

@@ -36,7 +36,7 @@ namespace VMM
     bool init();
     void* reserve(uint64_t size, RegionType type, PageFlags flags, uint64_t alignment = FrameAllocator::SMALL_SIZE);
     void* allocate(uint64_t size, RegionType type, PageFlags flags, uint64_t alignment = FrameAllocator::SMALL_SIZE);
-    const Region* findRegion(uint64_t address);
+    Region* findRegion(uint64_t address);
 
     bool commit(void* base);
     bool protect(void* base, PageFlags flags);

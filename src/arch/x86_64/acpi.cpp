@@ -200,9 +200,17 @@ bool ACPI::init(MADTInfo& madtInfo)
 
         if (entryHeader->type == 1 && entryHeader->length >= sizeof(MADT_IOAPIC))
         {
+            if (madtInfo.ioapicCount >= MAX_IOAPIC)
+            {
+                Serial::printf("ACPI: Too many IOAPIC entries in MADT (max %d)\n", MAX_IOAPIC);
+                return false;
+            }
+
             auto* ioapicEntry = reinterpret_cast<const MADT_IOAPIC*>(start);
-            madtInfo.ioapicPhys = ioapicEntry->ioapicAddr;
-            madtInfo.ioapicGlobalIrqBase = ioapicEntry->globalIrqBase;
+            const int n = madtInfo.ioapicCount++;
+
+            madtInfo.ioapicPhys[n] = ioapicEntry->ioapicAddr;
+            madtInfo.ioapicGlobalIrqBase[n] = ioapicEntry->globalIrqBase;
         }
         else if (entryHeader->type == 2 && entryHeader->length >= sizeof(MADT_ISO))
             if (auto* isoEntry = reinterpret_cast<const MADT_ISO*>(start); isoEntry->bus == 0 && isoEntry->source < 16)

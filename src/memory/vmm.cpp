@@ -143,21 +143,6 @@ void windowForType(const VMM::RegionType type, uint64_t& base, uint64_t& size)
     }
 }
 
-const char* regionTypeName(const VMM::RegionType type)
-{
-    switch (type)
-    {
-        case VMM::RegionType::ANONYMOUS: return "ANONYMOUS";
-        case VMM::RegionType::HEAP: return "HEAP";
-        case VMM::RegionType::STACK: return "STACK";
-        case VMM::RegionType::MMIO: return "MMIO";
-        case VMM::RegionType::FRAMEBUFFER: return "FRAMEBUFFER";
-        case VMM::RegionType::DIRECT: return "DIRECT";
-        case VMM::RegionType::RESERVED: return "RESERVED";
-        default: return "UNKNOWN";
-    }
-}
-
 bool remap(VMM::RegionNode* node, const PageFlags newFlags)
 {
     if (!node || !node->region.committed) return false;
@@ -243,10 +228,10 @@ void* VMM::allocate(const uint64_t size, const RegionType type, const PageFlags 
     return reserved;
 }
 
-const VMM::Region* VMM::findRegion(const uint64_t address)
+VMM::Region* VMM::findRegion(const uint64_t address)
 {
     LockGuard guard(vmmLock);
-    for (const Region* current = regionHead; current; current = current->next)
+    for (Region* current = regionHead; current; current = current->next)
         if (address >= current->base && address < current->base + current->size) return current;
 
     return nullptr;
@@ -347,7 +332,7 @@ bool VMM::map(void* virtualAddress, const uint64_t physicalAddress, uint64_t siz
 
     bool created = false;
     RegionNode* createdNode = nullptr;
-    Region* region = findRegion(virt, size);
+    Region* region = findRegion(virt);
 
     if (!region)
     {

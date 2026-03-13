@@ -11,7 +11,7 @@ extern uint8_t _text_start[], _text_end[], _rodata_start[], _rodata_end[], __dat
                __bss_end[];
 
 Spinlock pagingLock, frameAllocatorLock;
-uint64_t memoryBase = 0, memorySize = 0, totalFrames = 0, usedFrames = 0, next = 0, *bitmap = nullptr, *pml4 = nullptr;
+uint64_t bitmapSize = 0, bitmapPhysStart = 0, freePages = 0, totalPages = 0, *bitmap = nullptr, *pml4 = nullptr;
 bool pagingInitialized = false;
 
 void invlpg(const uint64_t address) { if (pagingInitialized) asm volatile ("invlpg (%0)" :: "r"(address) : "memory"); }
@@ -191,22 +191,6 @@ void unmapLarge(const uint64_t virtualAddress)
     if (tableEmpty(pdpt)) freeTable(pml4, static_cast<uint16_t>(pml4Index));
 }
 
-void reserve(void* frame)
-{
-    const auto phys = reinterpret_cast<uint64_t>(frame);
-    if (phys < memoryBase || phys >= memoryBase + memorySize || (phys - memoryBase) % FrameAllocator::SMALL_SIZE != 0)
-        return;
-
-    const uint64_t index = (phys - memoryBase) / FrameAllocator::SMALL_SIZE;
-    auto& word = bitmap[index / 64];
-
-    if (const uint64_t mask = 1ULL << (index % 64); !(word & mask))
-    {
-        word |= mask;
-        ++usedFrames;
-    }
-}
-
 bool Paging::init()
 {
     pml4 = createPageTable();
@@ -352,53 +336,89 @@ void Paging::unmap(const uint64_t virtualAddress, const uint64_t size)
 bool FrameAllocator::init()
 {
     LockGuard guard(frameAllocatorLock);
-    uint64_t bestBase = 0, bestSize = 0;
+
+    uint64_t highestAddr = 0;
+    totalPages = 0;
 
     for (size_t i = 0; i < memmap_request.response->entry_count; ++i)
     {
         const auto* entry = memmap_request.response->entries[i];
-        if (entry->type != LIMINE_MEMMAP_USABLE || entry->base < 0x100000) continue;
-        if (entry->length > bestSize)
-        {
-            bestBase = entry->base;
-            bestSize = entry->length;
-        }
+        if (entry->type != LIMINE_MEMMAP_USABLE) continue;
+        const uint64_t start = Alignment::alignUp(entry->base, SMALL_SIZE),
+                       end = Alignment::alignDown(entry->base + entry->length, SMALL_SIZE);
+
+        if (end <= start) continue;
+        if (end > highestAddr) highestAddr = end;
+
+        totalPages += (end - start) / SMALL_SIZE;
     }
 
-    if (bestBase == 0 || bestSize == 0)
+    if (highestAddr == 0 || totalPages == 0)
     {
-        Serial::printf("Paging: No memory region for frame allocator\n");
+        Serial::printf("Paging: No usable memory regions for frame allocator\n");
         return false;
     }
 
-    const uint64_t total = bestSize / SMALL_SIZE, bitmapBytes = (total + 63) / 64 * sizeof(uint64_t),
-                   bitmapPages = (bitmapBytes + SMALL_SIZE - 1) / SMALL_SIZE, bitmapPhys = bestBase;
-    bitmap = reinterpret_cast<uint64_t*>(hhdm_request.response->offset + bitmapPhys);
-    memset(bitmap, 0, bitmapPages * SMALL_SIZE);
+    const uint64_t bitmapBits = highestAddr / SMALL_SIZE,
+                   bitmapBytes = (bitmapBits + 63) / 64 * sizeof(uint64_t),
+                   bitmapPages = (bitmapBytes + SMALL_SIZE - 1) / SMALL_SIZE;
+    uint8_t* bitmapVirt = nullptr;
 
-    memoryBase = bestBase + bitmapPages * SMALL_SIZE;
-    memorySize = bestSize - bitmapPages * SMALL_SIZE;
-    totalFrames = memorySize / SMALL_SIZE;
-    usedFrames = 0;
+    for (size_t i = 0; i < memmap_request.response->entry_count; ++i)
+    {
+        const auto* entry = memmap_request.response->entries[i];
+        if (entry->type != LIMINE_MEMMAP_USABLE) continue;
+        if (entry->length < bitmapPages * SMALL_SIZE) continue;
+
+        bitmapVirt = reinterpret_cast<uint8_t*>(entry->base + hhdm_request.response->offset);
+        bitmapPhysStart = entry->base;
+
+        break;
+    }
+
+    if (!bitmapVirt)
+    {
+        Serial::printf("Paging: No suitable memory region for frame allocator bitmap\n");
+        return false;
+    }
+
+    bitmap = reinterpret_cast<uint64_t*>(bitmapVirt);
+    bitmapSize = bitmapBits;
+    freePages = 0;
+    memset(bitmap, 0xFF, bitmapBytes);
 
     for (size_t i = 0; i < memmap_request.response->entry_count; ++i)
     {
         const auto* e = memmap_request.response->entries[i];
-        if (e->length == 0) continue;
-        if (e->type == LIMINE_MEMMAP_USABLE) continue;
+        if (e->type != LIMINE_MEMMAP_USABLE) continue;
 
-        uint64_t start = e->base, end = e->base + e->length;
-        if (end <= memoryBase || start >= memoryBase + memorySize) continue;
-        if (start < memoryBase) start = memoryBase;
-        if (end > memoryBase + memorySize) end = memoryBase + memorySize;
+        const uint64_t start = Alignment::alignUp(e->base, SMALL_SIZE);
+        const uint64_t end = Alignment::alignDown(e->base + e->length, SMALL_SIZE);
+        if (end <= start) continue;
 
-        start = (start + SMALL_SIZE - 1) & ~(SMALL_SIZE - 1);
-        end = end & ~(SMALL_SIZE - 1);
-
-        for (uint64_t p = start; p < end; p += SMALL_SIZE) reserve(reinterpret_cast<void*>(p));
+        for (uint64_t addr = start; addr < end; addr += SMALL_SIZE)
+        {
+            const uint64_t index = addr / SMALL_SIZE;
+            bitmap[index / 64] &= ~(1ULL << (index % 64));
+        }
+        freePages += (end - start) / SMALL_SIZE;
     }
 
-    for (uint64_t i = 0; i < bitmapPages; ++i) reserve(reinterpret_cast<void*>(bitmapPhys + i * SMALL_SIZE));
+    for (uint64_t p = 0; p < bitmapPages; ++p)
+    {
+        const uint64_t index = bitmapPhysStart / SMALL_SIZE + p;
+        if (const uint64_t mask = 1ULL << (index % 64); !(bitmap[index / 64] & mask))
+        {
+            bitmap[index / 64] |= mask;
+            --freePages;
+        }
+    }
+
+    if (!(bitmap[0] & 1ULL))
+    {
+        bitmap[0] |= 1ULL;
+        --freePages;
+    }
     return true;
 }
 
@@ -406,35 +426,23 @@ void* FrameAllocator::alloc()
 {
     LockGuard guard(frameAllocatorLock);
 
-    const uint64_t words = (totalFrames + 63) / 64;
-    uint64_t w = next / 64;
-
-    for (uint64_t pass = 0; pass < 2; ++pass)
+    const uint64_t words = (bitmapSize + 63) / 64;
+    for (uint64_t word = 0; word < words; ++word)
     {
-        for (; w < words; ++w)
-        {
-            const uint64_t used = bitmap[w];
-            uint64_t freeMask = ~used;
+        uint64_t freeMask = ~bitmap[word];
 
-            if (w == words - 1)
-                if (const uint64_t validBits = totalFrames - (words - 1) * 64; validBits < 64)
-                    freeMask &= (1ULL << validBits) - 1;
-            if (!freeMask) continue;
+        if (word == words - 1)
+            if (const uint64_t validBits = bitmapSize - word * 64; validBits < 64) freeMask &= (1ULL << validBits) - 1;
+        if (!freeMask) continue;
 
-            const uint64_t bit1 = __builtin_ctzll(freeMask) + 1;
-            if (bit1 == 0) continue;
-            bitmap[w] = used | (1ULL << (bit1 - 1));
-            ++usedFrames;
+        const uint64_t bit = __builtin_ctzll(freeMask);
+        bitmap[word] |= 1ULL << bit;
+        --freePages;
 
-            const uint64_t frameIndex = w * 64 + (bit1 - 1);
-            next = frameIndex + 1;
-
-            return reinterpret_cast<void*>(memoryBase + frameIndex * SMALL_SIZE);
-        }
-        w = 0;
+        return reinterpret_cast<void*>((word * 64 + bit) * SMALL_SIZE);
     }
 
-    Serial::printf("Paging: Out of memory in FrameAllocator! Used: %lu, Total: %lu\n", usedFrames, totalFrames);
+    Serial::printf("Paging: Out of memory! (free: %lu pages, total: %lu pages)\n", freePages, totalPages);
     return nullptr;
 }
 
@@ -443,15 +451,14 @@ void FrameAllocator::free(void* frame)
     LockGuard guard(frameAllocatorLock);
 
     const auto phys = reinterpret_cast<uint64_t>(frame);
-    if (phys < memoryBase || phys >= memoryBase + memorySize || (phys - memoryBase) % SMALL_SIZE != 0) return;
+    if (phys % SMALL_SIZE != 0) return;
+    const uint64_t index = phys / SMALL_SIZE;
+    if (index >= bitmapSize) return;
 
-    const uint64_t index = (phys - memoryBase) / SMALL_SIZE;
-    auto& word = bitmap[index / 64];
-
-    if (const uint64_t mask = 1ULL << (index % 64); word & mask)
+    if (const uint64_t mask = 1ULL << (index % 64); bitmap[index / 64] & mask)
     {
-        word &= ~mask;
-        --usedFrames;
+        bitmap[index / 64] &= ~mask;
+        ++freePages;
     }
 }
 
@@ -460,13 +467,14 @@ bool FrameAllocator::used(void* frame)
     LockGuard guard(frameAllocatorLock);
 
     const auto phys = reinterpret_cast<uint64_t>(frame);
-    if (phys < memoryBase || phys >= memoryBase + memorySize || (phys - memoryBase) % SMALL_SIZE != 0) return false;
+    if (phys % SMALL_SIZE != 0) return false;
+    const uint64_t index = phys / SMALL_SIZE;
+    if (index >= bitmapSize) return false;
 
-    const uint64_t index = (phys - memoryBase) / SMALL_SIZE;
-    return bitmap[index / 64] & 1ULL << (index % 64);
+    return bitmap[index / 64] & (1ULL << (index % 64));
 }
 
-uint64_t FrameAllocator::usedCount() { return usedFrames; }
-uint64_t FrameAllocator::totalCount() { return totalFrames; }
-uint64_t FrameAllocator::baseAddress() { return memoryBase; }
-uint64_t FrameAllocator::size() { return memorySize; }
+uint64_t FrameAllocator::usedCount() { return totalPages - freePages; }
+uint64_t FrameAllocator::totalCount() { return totalPages; }
+uint64_t FrameAllocator::baseAddress() { return 0; }
+uint64_t FrameAllocator::size() { return bitmapSize * SMALL_SIZE; }

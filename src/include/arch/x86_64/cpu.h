@@ -16,6 +16,7 @@ struct CPU
     uint64_t ticks, preemptedTasks;
 };
 
+static_assert(offsetof(CPU, self) == 0, "CPU::self must be at offset 0 for GS base access");
 extern CPU cpus[SMP::MAX_CPUS];
 
 namespace CPUManager

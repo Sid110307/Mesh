@@ -12,6 +12,7 @@
 #include <memory/buddy.h>
 #include <memory/paging.h>
 #include <memory/slab.h>
+#include <memory/vmm.h>
 
 extern limine_framebuffer_request framebuffer_request;
 extern limine_memmap_request memmap_request;
@@ -24,6 +25,7 @@ extern "C" void isrTimer();
 extern "C" void isrYield();
 
 extern Scheduler::Scheduler schedulers[SMP::MAX_CPUS];
+extern uint8_t kernelStacks[SMP::MAX_CPUS][SMP::SMP_STACK_SIZE];
 
 void initSIMD()
 {
@@ -98,7 +100,7 @@ void initGDT()
     Renderer::printf("\x1b[36mInitializing GDT... ");
     GDTManager::init();
     GDTManager::load();
-    GDTManager::setTSS(0, SMP::getKernelStackTop(0));
+    GDTManager::setTSS(0, reinterpret_cast<uint64_t>(&kernelStacks[0][SMP::SMP_STACK_SIZE]));
     GDTManager::loadTR(0);
     Renderer::printf("\x1b[32mDone!\n");
 }
@@ -119,6 +121,7 @@ void initPaging()
     Renderer::printf("\x1b[36mInitializing Paging... ");
     if (!FrameAllocator::init()) Panic::panic("Failed to initialize FrameAllocator.");
     if (!Paging::init()) Panic::panic("Failed to initialize Paging.");
+    if (!VMM::init()) Panic::panic("Failed to initialize VMM.");
     if (!BuddyAllocator::init()) Panic::panic("Failed to initialize BuddyAllocator.");
     if (!SlabAllocator::init()) Panic::panic("Failed to initialize SlabAllocator.");
     Renderer::printf("\x1b[32mDone!\n");
@@ -135,16 +138,21 @@ void initIOAPIC()
         return;
     }
 
-    const uint64_t ioapicVirt = madt.ioapicPhys + hhdm_request.response->offset;
-    if (!Paging::map(ioapicVirt, madt.ioapicPhys, FrameAllocator::SMALL_SIZE,
-                     PageFlags::PRESENT | PageFlags::RW | PageFlags::CACHE_DISABLE | PageFlags::WRITE_THROUGH |
-                     PageFlags::GLOBAL | PageFlags::NO_EXECUTE))
+    for (int i = 0; i < madt.ioapicCount; ++i)
     {
-        Renderer::printf("\x1b[31mFailed to map IOAPIC MMIO.\x1b[0m\n");
-        return;
+        const uint64_t ioapicVirt = madt.ioapicPhys[i] + hhdm_request.response->offset;
+        if (!Paging::map(ioapicVirt, madt.ioapicPhys[i], FrameAllocator::SMALL_SIZE,
+                         PageFlags::PRESENT | PageFlags::RW | PageFlags::CACHE_DISABLE | PageFlags::WRITE_THROUGH |
+                         PageFlags::GLOBAL | PageFlags::NO_EXECUTE))
+        {
+            Renderer::printf("\x1b[31mFailed to map IOAPIC %d MMIO.\x1b[0m\n", i);
+            return;
+        }
+
+        IOAPIC::init(ioapicVirt, madt.ioapicGlobalIrqBase[i]);
     }
 
-    IOAPIC::init(ioapicVirt, madt.ioapicGlobalIrqBase);
+    if (madt.ioapicCount == 0) Renderer::printf("\x1b[31mNo IOAPIC found in MADT.\x1b[0m\n");
     const auto lapicId = static_cast<uint8_t>(mp_request.response->bsp_lapic_id);
     uint32_t globalIrq;
     bool activeLow, levelTriggered;

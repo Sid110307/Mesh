@@ -5,6 +5,7 @@
 #include <arch/x86_64/lapic.h>
 #include <arch/x86_64/smp.h>
 #include <core/limine.h>
+#include <core/panic.h>
 #include <drivers/renderer.h>
 #include <memory/atomic.h>
 #include <memory/paging.h>
@@ -21,15 +22,12 @@ extern limine_executable_address_request executable_addr_request;
 extern limine_mp_request mp_request;
 extern "C" void trampoline();
 
-alignas(FrameAllocator::SMALL_SIZE) static uint8_t kernelStacks[SMP::MAX_CPUS][SMP::SMP_STACK_SIZE];
-alignas(FrameAllocator::SMALL_SIZE) static uint8_t apStacks[SMP::MAX_CPUS][SMP::SMP_STACK_SIZE];
-
 Spinlock smpLock;
 ApBootInfo apBoot[SMP::MAX_CPUS] = {};
-uint32_t apCount = 0;
-Atomic apReadyCount{0};
+Atomic<uint32_t> apReadyCount{0};
 SMP::CPUFeatures cpuFeatures = {};
-uint32_t cpuCount = 0, cpuIds[SMP::MAX_CPUS] = {};
+uint8_t kernelStacks[SMP::MAX_CPUS][SMP::SMP_STACK_SIZE], apStacks[SMP::MAX_CPUS][SMP::SMP_STACK_SIZE];
+uint32_t apCount = 0, cpuCount = 0, cpuIds[SMP::MAX_CPUS] = {};
 uint64_t lapicPhysBase = 0, lapicVirtBase = 0;
 
 extern "C" void apMain(uint32_t cpuId)
@@ -115,16 +113,19 @@ void SMP::init()
     cpuCount = logicalId;
     uint32_t expectedAPs = apCount;
 
-    int timeout = 1000000;
-    while (apReadyCount.load() < expectedAPs && timeout--) asm volatile ("pause");
-
-    if (timeout <= 0)
+    uint64_t start = LAPIC::timerRead();
+    while (apReadyCount.load() < expectedAPs)
     {
-        Renderer::printf("\x1b[31mTimeout waiting for APs! Using %u cores instead of %u.\x1b[0m\n",
-                         apReadyCount.load() + 1, cpuCount);
-        cpuCount = apReadyCount.load() + 1;
+        if (LAPIC::timerRead() - start >= LAPIC::TIMER_TICKS * 200)
+        {
+            Renderer::printf("\x1b[31m[SMP] Timeout waiting for APs to boot! Only %u/%u APs are online.\x1b[0m\n",
+                             apReadyCount.load(), expectedAPs);
+            break;
+        }
     }
-    else Renderer::printf("\x1b[32mAll %u cores online!\x1b[0m\n", cpuCount);
+
+    cpuCount = apReadyCount.load() + 1;
+    Renderer::printf("\x1b[32mAll %u cores online!\x1b[0m\n", cpuCount);
 }
 
 void SMP::detectCPUFeatures()
@@ -184,7 +185,7 @@ uint32_t SMP::getLapicId()
 
 uint64_t SMP::getKernelStackTop(const uint32_t cpuId)
 {
-    if (cpuId >= cpuCount) return 0;
+    if (cpuId >= cpuCount) Panic::panic("Invalid CPU ID %u in getKernelStackTop! Max is %u.", cpuId, cpuCount - 1);
     return reinterpret_cast<uint64_t>(&kernelStacks[cpuId][SMP_STACK_SIZE]);
 }
 

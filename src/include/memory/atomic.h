@@ -1,17 +1,16 @@
 #pragma once
 
-#include <core/utils.h>
-
-class alignas(4) Atomic
+template <typename T>
+class Atomic
 {
 public:
-    explicit Atomic(uint32_t init = 0);
+    explicit Atomic(T init = 0);
 
-    [[nodiscard]] uint32_t load() const noexcept;
-    void store(uint32_t val) noexcept;
-    uint32_t increment() noexcept;
-    bool compareExchange(uint32_t& expected, uint32_t desired) noexcept;
+    [[nodiscard]] T load() const noexcept;
+    void store(T val) noexcept;
+    T increment() noexcept;
+    bool compareExchange(T& expected, T desired) noexcept;
 
 private:
-    uint32_t value;
+    T value;
 };
