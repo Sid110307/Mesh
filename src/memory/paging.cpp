@@ -245,6 +245,13 @@ bool Paging::init()
             Panic::panic("Failed to map physical memory page at 0x%lx\n", e->base + hhdm_request.response->offset);
     }
 
+    activate();
+    pagingInitialized = true;
+    return true;
+}
+
+void Paging::activate()
+{
     asm volatile ("mov %0, %%cr3" :: "r"(reinterpret_cast<uint64_t>(pml4) - hhdm_request.response->offset) : "memory");
     uint64_t cr4;
     asm volatile ("mov %%cr4, %0" : "=r"(cr4));
@@ -258,9 +265,6 @@ bool Paging::init()
     asm volatile ("mov %%cr0, %0" : "=r"(cr0));
     cr0 |= 1 << 31 | 1 << 16;
     asm volatile ("mov %0, %%cr0" :: "r"(cr0));
-
-    pagingInitialized = true;
-    return true;
 }
 
 bool Paging::map(uint64_t virtualAddress, uint64_t physicalAddress, uint64_t size, const PageFlags flags)
@@ -443,6 +447,33 @@ void* FrameAllocator::alloc()
     }
 
     Serial::printf("Paging: Out of memory! (free: %lu pages, total: %lu pages)\n", freePages, totalPages);
+    return nullptr;
+}
+
+void* FrameAllocator::allocContiguous(const uint64_t count)
+{
+    if (!count) return nullptr;
+    LockGuard guard(frameAllocatorLock);
+
+    uint64_t runStart = 0, runLength = 0;
+    for (uint64_t index = 0; index < bitmapSize; ++index)
+    {
+        if (bitmap[index / 64] & (1ULL << (index % 64)))
+        {
+            runLength = 0;
+            continue;
+        }
+
+        if (!runLength) runStart = index;
+        if (++runLength < count) continue;
+
+        for (uint64_t i = runStart; i < runStart + count; ++i) bitmap[i / 64] |= 1ULL << (i % 64);
+        freePages -= count;
+
+        return reinterpret_cast<void*>(runStart * SMALL_SIZE);
+    }
+
+    Serial::printf("Paging: No contiguous run of %lu pages available\n", count);
     return nullptr;
 }
 

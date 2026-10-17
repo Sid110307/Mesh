@@ -41,6 +41,7 @@ namespace Alignment
 namespace Paging
 {
     bool init();
+    void activate();
     bool map(uint64_t virtualAddress, uint64_t physicalAddress, uint64_t size, PageFlags flags);
     void unmap(uint64_t virtualAddress, uint64_t size);
 }
@@ -49,6 +50,7 @@ namespace FrameAllocator
 {
     bool init();
     void* alloc();
+    void* allocContiguous(uint64_t count);
     void free(void* frame);
     bool used(void* frame);
 

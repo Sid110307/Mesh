@@ -32,6 +32,7 @@ uint64_t lapicPhysBase = 0, lapicVirtBase = 0;
 
 extern "C" void apMain(uint32_t cpuId)
 {
+    Paging::activate();
     GDTManager::load();
     IDTManager::load();
     GDTManager::loadTR(cpuId);

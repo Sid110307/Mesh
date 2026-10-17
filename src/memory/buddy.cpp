@@ -120,7 +120,7 @@ bool BuddyAllocator::init()
     buddyBase = FrameAllocator::baseAddress();
     buddySize = FrameAllocator::size();
 
-    if (buddyBase == 0 || buddySize < FrameAllocator::SMALL_SIZE)
+    if (buddySize < FrameAllocator::SMALL_SIZE)
     {
         Serial::printf("BuddyAllocator: No memory available for buddy allocator\n");
         return false;
@@ -155,22 +155,11 @@ bool BuddyAllocator::init()
         return false;
     }
 
-    uint64_t metaPhys = 0;
-    for (uint64_t i = 0; i < metaPages; ++i)
+    const auto metaPhys = reinterpret_cast<uint64_t>(FrameAllocator::allocContiguous(metaPages));
+    if (!metaPhys)
     {
-        void* f = FrameAllocator::alloc();
-        if (!f)
-        {
-            Serial::printf("BuddyAllocator: Failed to allocate frame for metadata\n");
-            return false;
-        }
-
-        if (i == 0) metaPhys = reinterpret_cast<uint64_t>(f);
-        else if (reinterpret_cast<uint64_t>(f) != metaPhys + i * FrameAllocator::SMALL_SIZE)
-        {
-            Serial::printf("BuddyAllocator: Metadata frames are not contiguous\n");
-            return false;
-        }
+        Serial::printf("BuddyAllocator: Failed to allocate contiguous frames for metadata\n");
+        return false;
     }
 
     const uint64_t metaVirtBase = metaPhys + hhdm_request.response->offset;
@@ -185,18 +174,12 @@ bool BuddyAllocator::init()
     memset(isFree, 0, (buddyPages + 7) / 8);
 
     for (size_t i = 0; i < buddyPages; ++i)
-    {
-        if (i < metaPages)
-        {
-            setFreeBit(isFree, i, false);
-            continue;
-        }
         setFreeBit(isFree, i, !FrameAllocator::used(reinterpret_cast<void*>(addressFromIndex(i))));
-    }
 
+    const uint64_t metaIndex = indexFromAddress(metaPhys);
     for (uint64_t i = 0; i < metaPages; ++i)
     {
-        auto& page = pages[i];
+        auto& page = pages[metaIndex + i];
         page.reserved = true;
         page.free = false;
         page.head = false;
