@@ -2,6 +2,10 @@
 
 > An x86 OS kernel with SMP, paging, and IO, written in C++ and x86 Assembly.
 
+<p align="center">
+  <img src="docs/mesh.png" alt="Mesh booting on four CPUs in QEMU" width="560" />
+</p>
+
 ### Features
 
 #### Current
