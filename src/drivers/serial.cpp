@@ -2,7 +2,7 @@
 #include <memory/spinlock.h>
 
 uint16_t port = 0x3F8;
-bool serialInitialized = false;
+bool serialInit = false;
 Spinlock serialLock;
 
 void printCharUnlocked(const uint8_t c)
@@ -15,7 +15,7 @@ void printCharUnlocked(const uint8_t c)
 
 void printUnlocked(const char* str)
 {
-    if (!serialInitialized) Serial::init();
+    if (!serialInit) Serial::init();
     if (!str)
     {
         printUnlocked("Serial: Invalid string\n");
@@ -39,7 +39,7 @@ void printDecUnlocked(const uint64_t value)
 
 void Serial::init()
 {
-    if (serialInitialized) return;
+    if (serialInit) return;
 
     outb(port + 1, 0x00);
     outb(port + 3, 0x80);
@@ -49,14 +49,14 @@ void Serial::init()
     outb(port + 2, 0xC7);
     outb(port + 4, 0x0B);
 
-    serialInitialized = true;
+    serialInit = true;
 }
 
 void Serial::printf(const char* fmt, ...)
 {
     LockGuard guard(serialLock);
 
-    if (!serialInitialized) init();
+    if (!serialInit) init();
     if (!fmt || !*fmt)
     {
         printUnlocked("Serial: Invalid format string\n");
@@ -74,7 +74,7 @@ void Serial::printChar(const uint8_t c)
 {
     LockGuard guard(serialLock);
 
-    if (!serialInitialized) init();
+    if (!serialInit) init();
     printCharUnlocked(c);
 }
 

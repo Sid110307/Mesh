@@ -1,91 +1,61 @@
-#include <arch/x86_64/cpu.h>
 #include <arch/x86_64/isr.h>
+#include <arch/x86_64/smp.h>
 #include <core/panic.h>
-#include <drivers/renderer.h>
+#include <drivers/serial.h>
+#include <memory/paging.h>
 
-uint64_t readRbp()
-{
-    uint64_t rbp;
-    asm volatile ("mov %%rbp, %0" : "=r"(rbp));
+uint32_t panicClaimed = 0;
+[[noreturn]] void halt() { while (true) asm volatile ("cli; hlt"); }
 
-    return rbp;
-}
-
-void Panic::panic(const char* fmt, ...)
+void beginPanic()
 {
     Interrupt::disableInterrupts();
-    Renderer::setSerialPrint(true);
-    Renderer::printf("\n\x1b[31m==================== KERNEL PANIC ====================\x1b[0m\n");
+    if (__atomic_exchange_n(&panicClaimed, 1u, __ATOMIC_ACQ_REL)) halt();
+
+    SMP::stopOthers();
+    Serial::emergencyPrintf("\n================ KERNEL PANIC ================\n");
+}
+
+[[noreturn]] void Panic::panic(const char* fmt, ...)
+{
+    beginPanic();
+    va_list args;
+    va_start(args, fmt);
+    Serial::emergencyVprintf(fmt, args);
+    va_end(args);
+    Serial::emergencyPrintf("\n");
+
+    printStackTrace();
+    halt();
+}
+
+[[noreturn]] void Panic::panicFrame(const Interrupt::Frame* frame, const char* fmt, ...)
+{
+    beginPanic();
+    if (frame)
+        Serial::emergencyPrintf("RIP: 0x%lx RSP: 0x%lx CS: 0x%lx SS: 0x%lx RFLAGS: 0x%lx\n",
+                                frame->rip, frame->rsp, frame->cs, frame->ss, frame->rflags);
 
     va_list args;
     va_start(args, fmt);
-    vformat(fmt, args, [](const char c) { Renderer::printChar(c, WHITE, BLACK); },
-            [](const char* s) { Renderer::print(s, WHITE, BLACK); },
-            [](const uint64_t h) { Renderer::printHex(h, WHITE, BLACK); },
-            [](const uint64_t d) { Renderer::printDec(d, WHITE, BLACK); });
+    Serial::emergencyVprintf(fmt, args);
     va_end(args);
+    Serial::emergencyPrintf("\n");
 
-    Renderer::printf("\n\x1b[31m======================================================\x1b[0m\n");
     printStackTrace();
-
-    while (true) asm volatile ("hlt");
+    halt();
 }
 
-void Panic::panicFrame(const Interrupt::Frame* frame, const char* fmt, ...)
+void Panic::printStackTrace(uint64_t rbp, const int maxFrames)
 {
-    Interrupt::disableInterrupts();
-    Renderer::setSerialPrint(true);
-    Renderer::printf("\n\x1b[31m==================== KERNEL PANIC ====================\x1b[0m\n");
-
-    if (frame)
+    if (!rbp) asm volatile ("mov %%rbp, %0" : "=r"(rbp));
+    for (int i = 0; i < maxFrames && i < 64; ++i)
     {
-        Renderer::printf("\x1b[90mRIP:\x1b[0m 0x%lx | ", frame->rip);
-        Renderer::printf("\x1b[90mRSP:\x1b[0m 0x%lx\n", frame->rsp);
-        Renderer::printf("\x1b[90mRFLAGS:\x1b[0m 0x%lx | ", frame->rflags);
-        Renderer::printf("\x1b[90mCS:\x1b[0m 0x%lx | ", frame->cs);
-        Renderer::printf("\x1b[90mSS:\x1b[0m 0x%lx\n", frame->ss);
-    }
-
-    if (fmt && *fmt)
-    {
-        va_list args;
-        va_start(args, fmt);
-        vformat(fmt, args, [](const char c) { Renderer::printChar(c, WHITE, BLACK); },
-                [](const char* s) { Renderer::print(s, WHITE, BLACK); },
-                [](const uint64_t h) { Renderer::printHex(h, WHITE, BLACK); },
-                [](const uint64_t d) { Renderer::printDec(d, WHITE, BLACK); });
-        va_end(args);
-    }
-
-    Renderer::printf("\n\x1b[31m======================================================\x1b[0m\n");
-    printStackTrace();
-
-    while (true) asm volatile ("hlt");
-}
-
-void Panic::printStackTrace(uint64_t basePointer, const int maxFrames)
-{
-    if (basePointer == 0) basePointer = readRbp();
-
-    Renderer::printf("\n\x1b[90mStack Trace (RBP: 0x%lx):\x1b[0m\n", basePointer);
-    uint64_t rbp = basePointer;
-
-    for (int i = 0; i < maxFrames; ++i)
-    {
-        if (rbp == 0 || (rbp & 0x7) )
-        {
-            Renderer::printf("\x1b[90m[End of stack trace]\x1b[0m\n");
-            break;
-        }
+        if (!rbp || (rbp & 7) || rbp > UINT64_MAX - 16 || !Paging::isMapped(rbp) || !Paging::isMapped(rbp + 15)) break;
 
         const auto* frame = reinterpret_cast<const uint64_t*>(rbp);
-        Renderer::printf("\x1b[90m#%d: 0x%lx\x1b[0m\n", i, frame[1]);
-
-        if (frame[0] <= rbp)
-        {
-            Renderer::printf("\x1b[90m[Invalid frame pointer: 0x%lx]\x1b[0m\n", frame[0]);
-            break;
-        }
+        Serial::emergencyPrintf("#%d: 0x%lx\n", i, frame[1]);
+        if (frame[0] <= rbp) break;
         rbp = frame[0];
     }
 }

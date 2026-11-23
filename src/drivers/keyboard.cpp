@@ -48,7 +48,8 @@ constexpr Pair pairs[] = {
     {Keyboard::Key::SLASH, '/', '?'},
 };
 
-bool keyboardInitialized = false, ledsDirty = false;
+bool keyboardInit = false, ledsDirty = false, leftShift = false, rightShift = false, leftCtrl = false,
+     rightCtrl = false;
 Spinlock lock;
 Queue eventQueue = {};
 Keyboard::Modifiers currentModifiers = {false, false, false, false, false, false, false};
@@ -330,61 +331,16 @@ void decodeByte(const uint8_t scancode, Keyboard::Event& outEvent, bool& produce
 
     if (decodeState.prefixE0)
     {
-        if (decodeState.printScreenLength < sizeof(decodeState.printScreenBuffer))
-            decodeState.printScreenBuffer[decodeState.printScreenLength++] = scancode;
-
-        if (decodeState.printScreenLength == 1)
-        {
-            if (scancode != 0x2A && scancode != 0xB7)
-            {
-                outEvent = {};
-                outEvent.e0 = true;
-                outEvent.e1 = false;
-                outEvent.pressed = (scancode & 0x80) == 0;
-                outEvent.scancode = scancode & 0x7F;
-                outEvent.key = mapKey(outEvent.scancode, true);
-
-                produced = true;
-                decodeState.prefixE0 = false;
-                decodeState.printScreenLength = 0;
-
-                return;
-            }
-            return;
-        }
-
-        if (decodeState.printScreenLength == 2)
-        {
-            if (scancode != 0xE0)
-            {
-                decodeState.prefixE0 = false;
-                decodeState.printScreenLength = 0;
-
-                return;
-            }
-            return;
-        }
-
-        if (decodeState.printScreenLength == 3)
-        {
-            decodeState.prefixE0 = false;
-            decodeState.printScreenLength = 0;
-
-            if ((decodeState.printScreenBuffer[0] == 0x2A && decodeState.printScreenBuffer[2] == 0x37) ||
-                (decodeState.printScreenBuffer[0] == 0xB7 && decodeState.printScreenBuffer[2] == 0xAA))
-            {
-                outEvent = {};
-                outEvent.e0 = true;
-                outEvent.pressed = decodeState.printScreenBuffer[0] == 0x2A && decodeState.printScreenBuffer[2] == 0x37;
-                outEvent.key = Keyboard::Key::PRINT_SCREEN;
-                outEvent.scancode = 0;
-                produced = true;
-            }
-            return;
-        }
-
         decodeState.prefixE0 = false;
-        decodeState.printScreenLength = 0;
+        const uint8_t make = scancode & 0x7F;
+        if (make == 0x2A || make == 0x36) return;
+
+        outEvent = {};
+        outEvent.e0 = true;
+        outEvent.pressed = !(scancode & 0x80);
+        outEvent.scancode = make;
+        outEvent.key = make == 0x37 ? Keyboard::Key::PRINT_SCREEN : mapKey(make, true);
+        produced = outEvent.key != Keyboard::Key::NONE;
 
         return;
     }
@@ -400,12 +356,16 @@ void decodeByte(const uint8_t scancode, Keyboard::Event& outEvent, bool& produce
 
 void applyModifiers(const Keyboard::Event& event)
 {
-    if (event.key == Keyboard::Key::LSHIFT || event.key == Keyboard::Key::RSHIFT)
-        currentModifiers.shift = event.pressed;
-    else if (event.key == Keyboard::Key::LCTRL || event.key == Keyboard::Key::RCTRL)
-        currentModifiers.ctrl = event.pressed;
-    else if (event.key == Keyboard::Key::LALT) currentModifiers.alt = event.pressed;
-    else if (event.key == Keyboard::Key::RALT) currentModifiers.altGr = event.pressed;
+    if (event.key == Keyboard::Key::LSHIFT) leftShift = event.pressed;
+    if (event.key == Keyboard::Key::RSHIFT) rightShift = event.pressed;
+    if (event.key == Keyboard::Key::LCTRL) leftCtrl = event.pressed;
+    if (event.key == Keyboard::Key::RCTRL) rightCtrl = event.pressed;
+    if (event.key == Keyboard::Key::LALT) currentModifiers.alt = event.pressed;
+    if (event.key == Keyboard::Key::RALT) currentModifiers.altGr = event.pressed;
+
+    currentModifiers.shift = leftShift || rightShift;
+    currentModifiers.ctrl = leftCtrl || rightCtrl;
+    if (event.key == Keyboard::Key::NONE) return;
 
     if (event.pressed && event.key == Keyboard::Key::CAPSLOCK)
     {
@@ -462,15 +422,19 @@ bool consumeByte()
 void Keyboard::init()
 {
     LockGuard guard(lock);
-    if (keyboardInitialized) return;
+    if (keyboardInit) return;
 
     writeCommand(0xAD);
     writeCommand(0xA7);
-    while (inb(STATUS_PORT) & STATUS_OUTPUT_BUFFER) readData();
+    if (inb(STATUS_PORT) == 0xFF) return;
+    int drain = QUEUE_SIZE;
+    while (inb(STATUS_PORT) & STATUS_OUTPUT_BUFFER && drain--) readData();
+    if (drain < 0) return;
     writeCommand(0x20);
 
     uint8_t config = 0;
-    if (waitOutputSet()) config = readData();
+    if (!waitOutputSet()) return;
+    config = readData();
     config |= 1 << 0;
     config &= ~(1 << 1);
 
@@ -483,15 +447,15 @@ void Keyboard::init()
     setLeds(currentModifiers.capsLock, currentModifiers.numLock, currentModifiers.scrollLock);
     sendKeyboardCommand(0xF4, false);
 
-    keyboardInitialized = true;
+    keyboardInit = true;
 }
 
-void Keyboard::irq() { while (consumeByte()); }
+void Keyboard::irq() { if (keyboardInit) for (size_t i = 0; i < QUEUE_SIZE && consumeByte(); ++i) {} }
 
 void Keyboard::service()
 {
     LockGuard guard(lock);
-    if (!keyboardInitialized || !ledsDirty) return;
+    if (!keyboardInit || !ledsDirty) return;
 
     ledsDirty = false;
     setLeds(currentModifiers.capsLock, currentModifiers.numLock, currentModifiers.scrollLock);
@@ -512,9 +476,8 @@ bool Keyboard::readEvent(Event& event)
 char Keyboard::readChar()
 {
     Event event = {};
-    if (!readEvent(event)) return 0;
-
-    return event.pressed && event.ascii ? event.ascii : 0;
+    while (readEvent(event)) if (event.pressed && event.ascii) return event.ascii;
+    return 0;
 }
 
 Keyboard::Modifiers Keyboard::getModifiers()

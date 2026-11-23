@@ -48,23 +48,20 @@ but can't be revoked early.
 - [x] PCI/ACPI support with RSDP/RSDT/XSDT parsing
 - [x] Per-CPU data structures
 - [ ] LAPIC timer interrupts and sleep functions
-- [ ] BIOS support
-- [ ] SSE/SSE2 support on all CPUs
-- [ ] Kernel heap allocator (buddy & slab)
 - [ ] Scheduler
 - [ ] Virtual memory management
-- [ ] Process management and address spaces
 - [ ] Kernel threads and context switching
+- [ ] Single physical memory owner (buddy allocator)
+- [ ] TLB shooting and flushing
 
 #### Future
 
-- [ ] Single physical memory owner (buddy allocator)
-- [ ] TLB shooting and flushing
-- [ ] Per-CPU TLB epochs
+- [ ] BIOS support
+- [ ] SSE/SSE2 support on all CPUs
 - [ ] Bodies
-- [ ] Ring 3 and SYSCALL/SYSRET stuff
 - [ ] Leases
 - [ ] Publish regions
+- [ ] Ring 3 and SYSCALL/SYSRET stuff
 - [ ] Syscall interface
 - [ ] ELF loader
 - [ ] VFS layer
