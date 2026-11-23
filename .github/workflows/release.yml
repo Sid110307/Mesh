@@ -19,6 +19,9 @@ jobs:
           path: bin/bin/Mesh.iso
   release:
     name: Create Release
+    if: startsWith(github.ref, 'refs/tags/v') && github.event_name == 'push'
+    permissions:
+      contents: write
     needs: build
     runs-on: ubuntu-latest
     steps:
@@ -34,6 +37,6 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tag_name: ${{ env.release_tag }}
-          name: Release ${{ env.release_tag }}
+          tag_name: ${{ github.ref_name }}
+          name: Release ${{ github.ref_name }}
           files: ./release-assets/Mesh.iso

@@ -1,11 +1,10 @@
 ENTRY(_start)
 SECTIONS {
-    KERNEL_BASE = 0xFFFFFFFF80000000;
-    . = KERNEL_BASE;
+    . = 0xFFFFFFFF80000000;
     .text : ALIGN(4K) {
+        _text_start = .;
         KEEP(*(.text.boot))
         KEEP(*(.text.smp))
-        _text_start = .;
         *(.text .text.*)
         _text_end = .;
     }
@@ -16,7 +15,15 @@ SECTIONS {
     }
     .data : ALIGN(4K) {
         __data_start = .;
+        KEEP(*(.limine_requests_start))
+        KEEP(*(.limine_requests))
+        KEEP(*(.limine_requests_end))
         *(.data .data.*)
+        . = ALIGN(8);
+        __init_array_start = .;
+        KEEP(*(SORT_BY_INIT_PRIORITY(.init_array.*)))
+        KEEP(*(.init_array))
+        __init_array_end = .;
         __data_end = .;
     }
     .bss : ALIGN(4K) {
@@ -24,10 +31,5 @@ SECTIONS {
         *(.bss .bss.* COMMON)
         __bss_end = .;
     }
-    .assets : ALIGN(4K) {
-        __assets_start = .;
-        *(.assets .assets.*)
-        __assets_end = .;
-    }
-    /DISCARD/ : { *(.eh_frame) }
+    /DISCARD/ : { *(.eh_frame .eh_frame.* .comment .note.*) }
 }

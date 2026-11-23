@@ -77,13 +77,13 @@ add_custom_target(embedded_assets ALL DEPENDS ${EMBED_ASSET_OBJS})
 add_executable(mesh.elf ${ASM_NASM_SRC} ${C_SRC} ${CPP_SRC} ${EMBED_ASSET_OBJS})
 add_dependencies(mesh.elf embedded_assets)
 
-set(COMMON_C_FLAGS -ffreestanding -g -O2 -Wall -Wextra -m64 -mno-red-zone -mgeneral-regs-only -fno-omit-frame-pointer)
+set(COMMON_C_FLAGS -ffreestanding -g -O2 -Wall -Wextra -m64 -mno-red-zone -mgeneral-regs-only -fno-omit-frame-pointer -fno-pie -mcmodel=kernel)
 target_compile_options(mesh.elf PRIVATE $<$<COMPILE_LANGUAGE:C>:${COMMON_C_FLAGS}>
     $<$<COMPILE_LANGUAGE:CXX>:${COMMON_C_FLAGS} -fno-exceptions -fno-rtti>
     $<$<COMPILE_LANGUAGE:ASM_NASM>:-f elf64>)
 target_include_directories(mesh.elf PRIVATE ${CMAKE_SOURCE_DIR}/src/include)
 target_compile_definitions(mesh.elf PRIVATE LIMINE_API_REVISION=3)
-target_link_options(mesh.elf PRIVATE -nostdlib -z noexecstack -static -T ${CMAKE_SOURCE_DIR}/lib/linker.ld)
+target_link_options(mesh.elf PRIVATE -Wl,--build-id=none -no-pie -nostdlib -z noexecstack -static -T ${CMAKE_SOURCE_DIR}/lib/linker.ld)
 
 add_custom_command(
     OUTPUT ${OUT_DIR}/Mesh.iso
@@ -104,7 +104,7 @@ add_custom_command(
 )
 add_custom_target(iso DEPENDS ${OUT_DIR}/Mesh.iso)
 add_custom_target(run
-    COMMAND ${QEMU_EXECUTABLE} -machine q35 -m 512M -smp 4 -serial mon:stdio -no-reboot -s -cdrom ${OUT_DIR}/Mesh.iso
+    COMMAND ${QEMU_EXECUTABLE} -machine q35 -accel kvm -cpu host -m 512M -smp 4 -serial mon:stdio -no-reboot -s -cdrom ${OUT_DIR}/Mesh.iso
     -drive if=pflash,format=raw,readonly=on,file=${OVMF_CODE_FILE}
     -drive if=pflash,format=raw,file=${CMAKE_BINARY_DIR}/OVMF_VARS.fd
     DEPENDS iso

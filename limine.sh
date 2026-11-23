@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 sudo apt-get update
-sudo apt-get install -y nasm cmake qemu-system-x86 xorriso binutils
+sudo apt-get install -y nasm cmake qemu-system-x86 xorriso binutils ovmf
 git clone --branch v10.x-binary https://github.com/limine-bootloader/limine.git --depth=1
 make -C limine
 
