@@ -12,9 +12,9 @@ extern uint8_t _text_start[], _text_end[], _rodata_start[], _rodata_end[], __dat
 
 Spinlock pagingLock, frameAllocatorLock;
 uint64_t bitmapSize = 0, bitmapPhysStart = 0, freePages = 0, totalPages = 0, *bitmap = nullptr, *pml4 = nullptr;
-bool pagingInitialized = false;
+bool pagingInit = false;
 
-void invlpg(const uint64_t address) { if (pagingInitialized) asm volatile ("invlpg (%0)" :: "r"(address) : "memory"); }
+void invlpg(const uint64_t address) { if (pagingInit) asm volatile ("invlpg (%0)" :: "r"(address) : "memory"); }
 
 uint64_t* createPageTable()
 {
@@ -246,7 +246,7 @@ bool Paging::init()
     }
 
     activate();
-    pagingInitialized = true;
+    pagingInit = true;
     return true;
 }
 

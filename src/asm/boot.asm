@@ -6,6 +6,9 @@ section .text
 
 _start:
     lea rsp, [rel stack_top]
+    cld
+    extern runConstructors
+    call runConstructors
     call kernelMain
 .hang:
     hlt

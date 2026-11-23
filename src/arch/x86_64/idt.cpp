@@ -34,6 +34,7 @@ extern "C" void* const isrList[32] = {
 
 void IDTManager::init()
 {
+    setEntry(0xFF, reinterpret_cast<void (*)()>(isrSpurious), 0x8E, 0);
     for (int i = 0; i < 32; ++i)
     {
         uint8_t ist = 0;

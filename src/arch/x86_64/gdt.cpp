@@ -2,6 +2,8 @@
 #include <arch/x86_64/smp.h>
 #include <core/limine.h>
 #include <core/utils.h>
+#include <memory/vmm.h>
+#include <core/panic.h>
 
 struct __attribute__ ((packed)) GDTEntry
 {
@@ -32,8 +34,8 @@ GDTEntry gdt[GDT_ENTRIES] __attribute__ ((aligned(8))) = {};
 GDTPointer gdtPointer = {};
 }
 
-uint8_t istStacks[SMP::MAX_CPUS][7][8192] __attribute__ ((aligned(16)));
-TSS kernelTSS[SMP::MAX_CPUS] __attribute__ ((aligned(16)));
+uint64_t istStackTops[SMP::MAX_CPUS][5] __attribute__ ((aligned(16))) = {};
+TSS kernelTSS[SMP::MAX_CPUS] __attribute__ ((aligned(16))) = {};
 
 void setEntry(const uint16_t index, const uint32_t base, const uint32_t limit, const uint8_t access,
               const uint8_t flags)
@@ -75,9 +77,18 @@ void GDTManager::setTSS(const size_t cpuIndex, const uint64_t rsp0)
     memset(&kernelTSS[cpuIndex], 0, sizeof(TSS));
     kernelTSS[cpuIndex].rsp[0] = rsp0;
     kernelTSS[cpuIndex].ioMapBase = sizeof(TSS);
-    for (int i = 0; i < 7; ++i)
-        kernelTSS[cpuIndex].ist[i] = reinterpret_cast<uint64_t>(&istStacks[cpuIndex][i]) + sizeof(istStacks[cpuIndex][
-            i]);
+    for (int i = 0; i < 5; ++i)
+    {
+        if (!istStackTops[cpuIndex][i])
+        {
+            void* stack = VMM::allocateStack(SMP::SMP_STACK_SIZE);
+            if (!stack) Panic::panic("Failed to allocate IST stack");
+
+            istStackTops[cpuIndex][i] = reinterpret_cast<uint64_t>(stack) + FrameAllocator::SMALL_SIZE +
+                SMP::SMP_STACK_SIZE;
+        }
+        kernelTSS[cpuIndex].ist[i] = istStackTops[cpuIndex][i];
+    }
 
     const auto base = reinterpret_cast<uint64_t>(&kernelTSS[cpuIndex]);
     const size_t gdtIndex = GDT_TSS + cpuIndex * 2;

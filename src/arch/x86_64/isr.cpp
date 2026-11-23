@@ -2,7 +2,7 @@
 #include <arch/x86_64/lapic.h>
 #include <core/panic.h>
 #include <drivers/keyboard.h>
-#include <memory/vmm.h>
+#include <arch/x86_64/smp.h>
 
 const char* exceptionName(const uint64_t intNum)
 {
@@ -37,36 +37,20 @@ void showException(const Interrupt::Frame* frame, const uint64_t intNum, const u
 {
     if (intNum == 13)
     {
-        const char* table = (errorCode & 0b11) == 0
-                                ? "GDT"
-                                : (errorCode & 0b11) == 1
-                                ? "IDT"
-                                : (errorCode & 0b11) == 2
-                                ? "LDT"
-                                : "Unknown";
-        Panic::panicFrame(frame, "%s\nError code: 0x%lx (index: %lu, table: %s, ext: %lu)", exceptionName(intNum),
-                          errorCode, errorCode >> 3, table, errorCode & 1ULL);
+        const char* table = errorCode & 2 ? "IDT" : errorCode & 4 ? "LDT" : "GDT";
+        Panic::panicFrame(frame, "%s\nError: 0x%lx (index: %lu table: %s ext: %lu)",
+                          exceptionName(intNum), errorCode, errorCode >> 3, table, errorCode & 1ULL);
     }
-    else if (intNum == 14)
+    if (intNum == 14)
     {
-        uint64_t cr2 = 0;
+        uint64_t cr2;
         asm volatile ("mov %%cr2, %0" : "=r"(cr2));
 
-        if (const VMM::Region* region = VMM::findRegion(cr2))
-            Panic::panicFrame(
-                frame,
-                "%s\nCR2: 0x%lx\nError code: 0x%lx (P: %lu W: %lu U: %lu RS: %lu IF: %lu)\nVMM Region: %s\nRegion Base: 0x%lx\nRegion Size: 0x%lx\nRegion Flags: 0x%lx\nCommitted: %s\nDirect Mapped: %s",
-                exceptionName(intNum), cr2, errorCode, errorCode & 1ULL, errorCode & 2ULL, errorCode & 4ULL,
-                errorCode & 8ULL, errorCode & 16ULL, VMM::regionTypeName(region->type), region->base, region->size,
-                static_cast<uint64_t>(region->flags), region->committed ? "Yes" : "No",
-                region->directMapped ? "Yes" : "No");
-        else
-            Panic::panicFrame(
-                frame, "%s\nCR2: 0x%lx\nError code: 0x%lx (P: %lu W: %lu U: %lu RS: %lu IF: %lu)\nVMM Region: None",
-                exceptionName(intNum), cr2, errorCode, errorCode & 1ULL, errorCode & 2ULL, errorCode & 4ULL,
-                errorCode & 8ULL, errorCode & 16ULL);
+        Panic::panicFrame(frame, "%s\nCR2: 0x%lx Error: 0x%lx (P: %lu W: %lu U: %lu RS: %lu IF: %lu)",
+                          exceptionName(intNum), cr2, errorCode, errorCode & 1ULL, (errorCode >> 1) & 1ULL,
+                          (errorCode >> 2) & 1ULL, (errorCode >> 3) & 1ULL, (errorCode >> 4) & 1ULL);
     }
-    else Panic::panicFrame(frame, "%s", exceptionName(intNum));
+    Panic::panicFrame(frame, "%s\nError: 0x%lx", exceptionName(intNum), errorCode);
 }
 
 bool Interrupt::interruptsEnabled()
@@ -83,7 +67,7 @@ void Interrupt::disableInterrupts() { asm volatile ("cli" ::: "memory"); }
 extern "C" {
 __attribute__ ((interrupt)) void isr0(const Interrupt::Frame* f) { showException(f, 0, 0); }
 __attribute__ ((interrupt)) void isr1(const Interrupt::Frame* f) { showException(f, 1, 0); }
-__attribute__ ((interrupt)) void isr2(const Interrupt::Frame* f) { showException(f, 2, 0); }
+__attribute__ ((interrupt)) void isr2(const Interrupt::Frame* f) { if (!SMP::handleNmi()) showException(f, 2, 0); }
 __attribute__ ((interrupt)) void isr3(const Interrupt::Frame* f) { showException(f, 3, 0); }
 __attribute__ ((interrupt)) void isr4(const Interrupt::Frame* f) { showException(f, 4, 0); }
 __attribute__ ((interrupt)) void isr5(const Interrupt::Frame* f) { showException(f, 5, 0); }
@@ -102,7 +86,7 @@ __attribute__ ((interrupt)) void isr17(const Interrupt::Frame* f, const uint64_t
 __attribute__ ((interrupt)) void isr18(const Interrupt::Frame* f) { showException(f, 18, 0); }
 __attribute__ ((interrupt)) void isr19(const Interrupt::Frame* f) { showException(f, 19, 0); }
 __attribute__ ((interrupt)) void isr20(const Interrupt::Frame* f) { showException(f, 20, 0); }
-__attribute__ ((interrupt)) void isr21(const Interrupt::Frame* f) { showException(f, 21, 0); }
+__attribute__ ((interrupt)) void isr21(const Interrupt::Frame* f, const uint64_t e) { showException(f, 21, e); }
 __attribute__ ((interrupt)) void isr22(const Interrupt::Frame* f) { showException(f, 22, 0); }
 __attribute__ ((interrupt)) void isr23(const Interrupt::Frame* f) { showException(f, 23, 0); }
 __attribute__ ((interrupt)) void isr24(const Interrupt::Frame* f) { showException(f, 24, 0); }
@@ -110,9 +94,11 @@ __attribute__ ((interrupt)) void isr25(const Interrupt::Frame* f) { showExceptio
 __attribute__ ((interrupt)) void isr26(const Interrupt::Frame* f) { showException(f, 26, 0); }
 __attribute__ ((interrupt)) void isr27(const Interrupt::Frame* f) { showException(f, 27, 0); }
 __attribute__ ((interrupt)) void isr28(const Interrupt::Frame* f) { showException(f, 28, 0); }
-__attribute__ ((interrupt)) void isr29(const Interrupt::Frame* f) { showException(f, 29, 0); }
-__attribute__ ((interrupt)) void isr30(const Interrupt::Frame* f) { showException(f, 30, 0); }
+__attribute__ ((interrupt)) void isr29(const Interrupt::Frame* f, const uint64_t e) { showException(f, 29, e); }
+__attribute__ ((interrupt)) void isr30(const Interrupt::Frame* f, const uint64_t e) { showException(f, 30, e); }
 __attribute__ ((interrupt)) void isr31(const Interrupt::Frame* f) { showException(f, 31, 0); }
+
+__attribute__ ((interrupt)) void isrSpurious(Interrupt::Frame*) {}
 
 __attribute__ ((interrupt)) void isrKeyboard(Interrupt::Frame*)
 {

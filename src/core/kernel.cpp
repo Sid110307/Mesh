@@ -13,6 +13,7 @@
 #include <memory/paging.h>
 #include <memory/slab.h>
 #include <memory/vmm.h>
+#include <drivers/serial.h>
 
 extern limine_framebuffer_request framebuffer_request;
 extern limine_memmap_request memmap_request;
@@ -25,7 +26,14 @@ extern "C" void isrTimer();
 extern "C" void isrYield();
 
 extern Scheduler::Scheduler schedulers[SMP::MAX_CPUS];
-extern uint8_t kernelStacks[SMP::MAX_CPUS][SMP::SMP_STACK_SIZE];
+
+extern "C" void (*__init_array_start[])();
+extern "C" void (*__init_array_end[])();
+
+extern "C" void runConstructors()
+{
+    for (auto* p = __init_array_start; p != __init_array_end; ++p) (*p)();
+}
 
 void initSIMD()
 {
@@ -85,7 +93,7 @@ void dumpStats()
         Renderer::printf("\x1b[36m[SMP] \x1b[96m%u CPUs Detected\x1b[0m\n", mp_request.response->cpu_count);
 
     const auto cpuFeatures = SMP::getCPUFeatures();
-    Renderer::printf("\x1b[36m[CPU Features] \x1b[32m%s%s%s%s%s%s%s%s%s%s%s%s\x1b[0m\n",
+    Renderer::printf("\x1b[36m[CPU Features] \x1b[32m%s%s%s%s%s%s%s%s%s%s%s%s%s\x1b[0m\n",
                      cpuFeatures.hasSSE ? "SSE " : "", cpuFeatures.hasSSE2 ? "SSE2 " : "",
                      cpuFeatures.hasSSE3 ? "SSE3 " : "", cpuFeatures.hasSSE4_1 ? "SSE4.1 " : "",
                      cpuFeatures.hasSSE4_2 ? "SSE4.2 " : "", cpuFeatures.hasXSAVE ? "XSAVE " : "",
@@ -100,7 +108,7 @@ void initGDT()
     Renderer::printf("\x1b[36mInitializing GDT... ");
     GDTManager::init();
     GDTManager::load();
-    GDTManager::setTSS(0, reinterpret_cast<uint64_t>(&kernelStacks[0][SMP::SMP_STACK_SIZE]));
+    GDTManager::setTSS(0, SMP::getKernelStackTop(0));
     GDTManager::loadTR(0);
     Renderer::printf("\x1b[32mDone!\n");
 }
@@ -153,7 +161,20 @@ void initIOAPIC()
     }
 
     if (madt.ioapicCount == 0) Renderer::printf("\x1b[31mNo IOAPIC found in MADT.\x1b[0m\n");
-    const auto lapicId = static_cast<uint8_t>(mp_request.response->bsp_lapic_id);
+    uint32_t destination = mp_request.response->bsp_lapic_id;
+    if (destination > 255)
+    {
+        for (uint64_t i = 0; i < mp_request.response->cpu_count; ++i)
+            if (mp_request.response->cpus[i]->lapic_id <= 255)
+            {
+                destination = mp_request.response->cpus[i]->lapic_id;
+                break;
+            }
+        if (destination > 255)
+            Panic::panic("Failed to find a valid LAPIC ID for IOAPIC routing. Need an APIC ID below 256.");
+    }
+
+    const auto lapicId = static_cast<uint8_t>(destination);
     uint32_t globalIrq;
     bool activeLow, levelTriggered;
 
@@ -163,17 +184,6 @@ void initIOAPIC()
     outb(0x21, 0xFF);
     outb(0xA1, 0xFF);
 
-    Renderer::printf("\x1b[32mDone!\x1b[0m\n");
-}
-
-void initLapicTimer()
-{
-    Renderer::printf("\x1b[36mInitializing LAPIC Timer... ");
-    LAPIC::timerInit(0x22);
-    LAPIC::timerSetDivide(16);
-    LAPIC::timerCalibrate(10);
-    LAPIC::timerPeriodic();
-    CPUManager::getCurrentCPU()->timerReady = true;
     Renderer::printf("\x1b[32mDone!\x1b[0m\n");
 }
 
@@ -187,15 +197,13 @@ extern "C" [[noreturn]] void kernelMain()
     initPaging();
     initGDT();
     initIDT();
-    SMP::init();
-    LAPIC::init(SMP::getLapicBase());
 
     if (!CPUManager::initCPU(0, mp_request.response->bsp_lapic_id)) Panic::panic("Failed to initialize primary CPU.");
     if (!CPUManager::initRuntime(0)) Panic::panic("Failed to initialize primary CPU runtime.");
 
     initIOAPIC();
     Keyboard::init();
-    initLapicTimer();
+    SMP::init();
 
     Interrupt::enableInterrupts();
     while (true)
