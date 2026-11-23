@@ -22,10 +22,12 @@ isrYield:
     push r14
     push r15
 
-    push qword 0
-    lea rdi, [rsp + 8]
+    cld
+    mov rdi, rsp
+    mov r12, rsp
+    and rsp, -16
     call schedulerYieldIRQ
-    add rsp, 8
+    mov rsp, r12
 
     test rax, rax
     jz .noSwitch
