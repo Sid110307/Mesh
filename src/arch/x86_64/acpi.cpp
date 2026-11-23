@@ -2,6 +2,7 @@
 #include <arch/x86_64/lapic.h>
 #include <core/limine.h>
 #include <drivers/serial.h>
+#include <memory/paging.h>
 
 struct __attribute__ ((packed)) RSDP
 {
@@ -82,6 +83,28 @@ struct __attribute__ ((packed)) FADT
 extern limine_hhdm_request hhdm_request;
 extern limine_rsdp_request rsdp_request;
 
+void* mapAcpi(const uint64_t physical, const uint64_t length)
+{
+    if (!physical || !length || length > 16 * 1024 * 1024 || physical > UINT64_MAX - length) return nullptr;
+
+    const uint64_t base = Alignment::alignDown(physical, FrameAllocator::SMALL_SIZE),
+                   end = Alignment::alignUp(physical + length, FrameAllocator::SMALL_SIZE);
+
+    for (uint64_t p = base; p < end; p += FrameAllocator::SMALL_SIZE)
+        if (!Paging::map(p + hhdm_request.response->offset, p, FrameAllocator::SMALL_SIZE,
+                         PageFlags::PRESENT | PageFlags::GLOBAL | PageFlags::NO_EXECUTE))
+            return nullptr;
+    return reinterpret_cast<void*>(physical + hhdm_request.response->offset);
+}
+
+SDTHeader* mapSdt(const uint64_t physical)
+{
+    const auto* header = static_cast<SDTHeader*>(mapAcpi(physical, sizeof(SDTHeader)));
+    if (!header || header->length < sizeof(SDTHeader)) return nullptr;
+
+    return static_cast<SDTHeader*>(mapAcpi(physical, header->length));
+}
+
 bool signaturesMatch(const char* sig1, const char* sig2, const size_t len)
 {
     for (size_t i = 0; i < len; ++i) if (sig1[i] != sig2[i]) return false;
@@ -109,7 +132,7 @@ SDTHeader* findTable(SDTHeader* sdt, const char signature[4])
                                   : *reinterpret_cast<const uint32_t*>(base + i * 4);
         if (!phys) continue;
 
-        auto* hdr = reinterpret_cast<SDTHeader*>(phys + hhdm_request.response->offset);
+        auto* hdr = mapSdt(phys);
         if (hdr && signaturesMatch(hdr->signature, signature, 4))
         {
             if (!checksumValid(reinterpret_cast<const uint8_t*>(hdr), hdr->length))
@@ -131,7 +154,31 @@ bool ACPI::init(MADTInfo& madtInfo)
         return false;
     }
 
-    const auto* rsdp = reinterpret_cast<RSDP*>(rsdp_request.response->address);
+    uint64_t physical = rsdp_request.response->address;
+    if (physical >= hhdm_request.response->offset) physical -= hhdm_request.response->offset;
+    const auto* rsdp = static_cast<RSDP*>(mapAcpi(physical, 20));
+    if (!rsdp)
+    {
+        Serial::printf("ACPI: Failed to map RSDP\n");
+        return false;
+    }
+
+    if (rsdp->revision >= 2)
+    {
+        rsdp = static_cast<RSDP*>(mapAcpi(physical, sizeof(RSDP)));
+        if (!rsdp || rsdp->length < sizeof(RSDP) || rsdp->length > 4096)
+        {
+            Serial::printf("ACPI: Invalid RSDP length %u\n", rsdp ? rsdp->length : 0);
+            return false;
+        }
+
+        rsdp = static_cast<RSDP*>(mapAcpi(physical, rsdp->length));
+        if (!rsdp)
+        {
+            Serial::printf("ACPI: Failed to map RSDP\n");
+            return false;
+        }
+    }
     if (!signaturesMatch(rsdp->signature, "RSD PTR ", 8))
     {
         Serial::printf("ACPI: Invalid RSDP signature\n");
@@ -146,12 +193,22 @@ bool ACPI::init(MADTInfo& madtInfo)
     SDTHeader* root = nullptr;
     if (rsdp->revision >= 2 && rsdp->xsdtAddress)
     {
-        root = reinterpret_cast<SDTHeader*>(rsdp->xsdtAddress + hhdm_request.response->offset);
+        root = mapSdt(rsdp->xsdtAddress);
+        if (!root)
+        {
+            Serial::printf("ACPI: Failed to map XSDT\n");
+            return false;
+        }
         if (!signaturesMatch(root->signature, "XSDT", 4)) Serial::printf("ACPI: Invalid XSDT signature\n");
     }
     else if (rsdp->rsdtAddress)
     {
-        root = reinterpret_cast<SDTHeader*>(static_cast<uint64_t>(rsdp->rsdtAddress) + hhdm_request.response->offset);
+        root = mapSdt(rsdp->rsdtAddress);
+        if (!root)
+        {
+            Serial::printf("ACPI: Failed to map RSDT\n");
+            return false;
+        }
         if (!signaturesMatch(root->signature, "RSDT", 4)) Serial::printf("ACPI: Invalid RSDT signature\n");
     }
     else
@@ -161,22 +218,41 @@ bool ACPI::init(MADTInfo& madtInfo)
         return false;
     }
 
-    if (auto* facpHeader = findTable(root, "FACP"); !facpHeader) Serial::printf("ACPI: FACP not found\n");
-    else
-    {
-        if (const auto* fadt = reinterpret_cast<FADT*>(facpHeader); fadt->xPmTimerBlock.address)
+    if (!checksumValid(reinterpret_cast<const uint8_t*>(root), root->length)) return false;
+    if (const auto* header = findTable(root, "FACP"))
+        if (const auto* fadt = reinterpret_cast<const FADT*>(header);
+            header->length >= offsetof(FADT, flags) + sizeof(fadt->flags))
         {
-            if (fadt->xPmTimerBlock.addressSpace == 1 && fadt->xPmTimerBlock.address <= 0xFFFFFFFFu)
-                LAPIC::timerSetPort(static_cast<uint32_t>(fadt->xPmTimerBlock.address),
-                                    fadt->xPmTimerBlock.bitWidth == 32);
-            else
-                Serial::printf("ACPI: Invalid PM timer GAS in FADT (address space %u, address 0x%lx, bit width %u)\n",
-                               fadt->xPmTimerBlock.addressSpace, fadt->xPmTimerBlock.address,
-                               fadt->xPmTimerBlock.bitWidth);
+            const bool is32Bit = (fadt->flags & (1u << 8)) != 0;
+            bool configured = false;
+
+            if (header->length >= offsetof(FADT, xPmTimerBlock) + sizeof(FADT_GAS))
+                if (const auto& gas = fadt->xPmTimerBlock; gas.address && gas.bitOffset == 0)
+                {
+                    if (gas.addressSpace == 1 && gas.address <= 0xFFFC)
+                    {
+                        LAPIC::timerSetPort(static_cast<uint32_t>(gas.address), is32Bit);
+                        configured = true;
+                    }
+                    else if (gas.addressSpace == 0)
+                    {
+                        if (const uint64_t base = Alignment::alignDown(gas.address, FrameAllocator::SMALL_SIZE);
+                            !Paging::map(base + hhdm_request.response->offset, base,
+                                         Alignment::alignUp(gas.address - base + 4, FrameAllocator::SMALL_SIZE),
+                                         PageFlags::PRESENT | PageFlags::RW | PageFlags::CACHE_DISABLE |
+                                         PageFlags::NO_EXECUTE))
+                        {
+                            Serial::printf("ACPI: Failed to map PM timer GAS\n");
+                            return false;
+                        }
+
+                        LAPIC::timerSetMemory(gas.address + hhdm_request.response->offset, is32Bit);
+                        configured = true;
+                    }
+                }
+            if (!configured && fadt->pmTimerBlockAddr && fadt->pmTimerBlockAddr <= 0xFFFC)
+                LAPIC::timerSetPort(fadt->pmTimerBlockAddr, is32Bit);
         }
-        else if (fadt->pmTimerBlockAddr) LAPIC::timerSetPort(fadt->pmTimerBlockAddr, fadt->pmTimerLength == 4);
-        else Serial::printf("ACPI: No PM timer block address found in FADT\n");
-    }
 
     auto* madtHeader = findTable(root, "APIC");
     if (!madtHeader)
@@ -185,6 +261,11 @@ bool ACPI::init(MADTInfo& madtInfo)
         return false;
     }
 
+    if (madtHeader->length < sizeof(MADT))
+    {
+        Serial::printf("ACPI: Invalid MADT length\n");
+        return false;
+    }
     auto* madt = reinterpret_cast<MADT*>(madtHeader);
     const uint8_t *start = reinterpret_cast<uint8_t*>(madt) + sizeof(MADT),
                   *end = reinterpret_cast<uint8_t*>(madt) + madt->header.length;
@@ -224,7 +305,7 @@ bool ACPI::init(MADTInfo& madtInfo)
         start += entryHeader->length;
     }
 
-    if (!madtInfo.ioapicPhys)
+    if (!madtInfo.ioapicCount)
     {
         Serial::printf("ACPI: No IOAPIC entry found in MADT\n");
         return false;
